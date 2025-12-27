@@ -423,8 +423,8 @@ ${template.closingSection}`;
   const playEulogyAudio = async () => {
     if (!serviceOutline) return;
 
-    // Extract eulogy section from Markdown format
-    const eulogyMatch = serviceOutline.match(/## 2\. Eulogy \(6 minutes\)\s*\n([\s\S]*?)(?=\n## |\n# $|$)/);
+    // Extract eulogy section using the tags specified in the system instruction
+    const eulogyMatch = serviceOutline.match(/\[EULOGY_START\]([\s\S]*?)\[EULOGY_END\]/);
     const eulogyText = eulogyMatch ? eulogyMatch[1].trim() : serviceOutline;
 
     if (!eulogyText || eulogyText.length < 10) {

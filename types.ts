@@ -1,5 +1,6 @@
 export enum AppView {
   INTAKE = 'INTAKE',
+  TRANSITION = 'TRANSITION',
   DASHBOARD = 'DASHBOARD',
 }
 

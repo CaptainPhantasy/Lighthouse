@@ -41,20 +41,86 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan }
         };
 
         // Auto-create tasks for certain document types
-        if (analysis.taskSuggestion && onTaskCreated) {
-          const newTask: Task = {
-            id: `doc-task-${Date.now()}`,
-            title: analysis.taskSuggestion.title,
-            description: analysis.taskSuggestion.description,
-            priority: (analysis.taskSuggestion.priority as any) || 'NORMAL',
-            status: 'PENDING',
-            category: (analysis.taskSuggestion.category as any) || 'FINANCIAL'
-          };
+        if (onTaskCreated) {
+          let taskToCreate: Task | null = null;
 
-          onTaskCreated(newTask);
-          setRecentlyCreatedTask(newTask.id);
-          // Clear the notification after 3 seconds
-          setTimeout(() => setRecentlyCreatedTask(null), 3000);
+          // Create specific tasks based on document type and extracted data
+          switch (analysis.documentType) {
+            case 'INSURANCE':
+              const policyNumber = analysis.entities?.find((e: any) => e.key.toLowerCase().includes('policy'))?.value;
+              const carrier = analysis.entities?.find((e: any) => e.key.toLowerCase().includes('carrier') || e.key.toLowerCase().includes('company'))?.value;
+
+              if (policyNumber && carrier) {
+                taskToCreate = {
+                  id: `insurance-task-${Date.now()}`,
+                  title: `Claim Policy #${policyNumber} with ${carrier}`,
+                  description: `Contact ${carrier} to begin the claims process for policy #${policyNumber}. Have the policy document and death certificate ready.`,
+                  priority: 'HIGH',
+                  status: 'PENDING',
+                  category: 'FINANCIAL'
+                };
+              }
+              break;
+
+            case 'WILL':
+              const executor = analysis.entities?.find((e: any) => e.key.toLowerCase().includes('executor'))?.value;
+              const lawyer = analysis.entities?.find((e: any) => e.key.toLowerCase().includes('lawyer') || e.key.toLowerCase().includes('attorney'))?.value;
+
+              if (executor) {
+                taskToCreate = {
+                  id: `will-task-${Date.now()}`,
+                  title: `Notify Executor ${executor}`,
+                  description: `Contact the will executor, ${executor}, to inform them of the passing and discuss next steps for estate administration.`,
+                  priority: 'URGENT',
+                  status: 'PENDING',
+                  category: 'LEGAL'
+                };
+              } else if (lawyer) {
+                taskToCreate = {
+                  id: `will-task-${Date.now()}`,
+                  title: `Contact Estate Attorney ${lawyer}`,
+                  description: `Reach out to the estate attorney ${lawyer} to begin the probate process and understand the legal requirements.`,
+                  priority: 'URGENT',
+                  status: 'PENDING',
+                  category: 'LEGAL'
+                };
+              }
+              break;
+
+            case 'ID':
+              const idNumber = analysis.entities?.find((e: any) => e.key.toLowerCase().includes('id') || e.key.toLowerCase().includes('license'))?.value;
+              if (idNumber) {
+                taskToCreate = {
+                  id: `id-task-${Date.now()}`,
+                  title: 'Report Death to Government Agencies',
+                  description: `Contact the Social Security Administration and relevant agencies to report the death using ID ${idNumber}. This prevents identity theft and stops benefits.`,
+                  priority: 'NORMAL',
+                  status: 'PENDING',
+                  category: 'LEGAL'
+                };
+              }
+              break;
+
+            default:
+              // Use the AI's task suggestion if available
+              if (analysis.taskSuggestion) {
+                taskToCreate = {
+                  id: `doc-task-${Date.now()}`,
+                  title: analysis.taskSuggestion.title,
+                  description: analysis.taskSuggestion.description,
+                  priority: (analysis.taskSuggestion.priority as any) || 'NORMAL',
+                  status: 'PENDING',
+                  category: (analysis.taskSuggestion.category as any) || 'FINANCIAL'
+                };
+              }
+          }
+
+          if (taskToCreate) {
+            onTaskCreated(taskToCreate);
+            setRecentlyCreatedTask(taskToCreate.id);
+            // Clear the notification after 3 seconds
+            setTimeout(() => setRecentlyCreatedTask(null), 3000);
+          }
         }
 
         // Notify parent about new document scan

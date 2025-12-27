@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MOCK_TASKS, TEXTS } from '../constants';
 import { Task, UserState } from '../types';
-import { Share2, CheckCircle, Circle, Clock, Filter, AlertTriangle } from 'lucide-react';
+import { Share2, CheckCircle, Circle, Clock, Filter, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 
 interface DelegationHubProps {
   userState: UserState;
@@ -11,6 +11,14 @@ interface DelegationHubProps {
 const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
   const [dynamicTasks, setDynamicTasks] = useState<Task[]>(tasks);
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
+  const [showHiddenTasks, setShowHiddenTasks] = useState(() => {
+    // Load from localStorage on mount
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('lighthouse_show_hidden_tasks');
+      return saved === 'true';
+    }
+    return false;
+  });
 
   // Filter tasks based on brain fog level
   useEffect(() => {
@@ -26,10 +34,18 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
 
     // If brain fog level > 3, hide non-urgent FINANCIAL and LEGAL tasks
     if (userState.brainFogLevel > 3) {
-      filteredTasks = filteredTasks.filter(task =>
-        !(task.category === 'FINANCIAL' && task.priority !== 'URGENT') &&
-        !(task.category === 'LEGAL' && task.priority !== 'URGENT')
+      const hiddenTasks = filteredTasks.filter(task =>
+        (task.category === 'FINANCIAL' && task.priority !== 'URGENT') ||
+        (task.category === 'LEGAL' && task.priority !== 'URGENT')
       );
+
+      // Only hide hidden tasks if showHiddenTasks is false
+      if (!showHiddenTasks) {
+        filteredTasks = filteredTasks.filter(task =>
+          !((task.category === 'FINANCIAL' && task.priority !== 'URGENT') ||
+          (task.category === 'LEGAL' && task.priority !== 'URGENT'))
+        );
+      }
     }
 
     // Add VA burial benefits task if user is veteran
@@ -48,7 +64,7 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
     }
 
     setDynamicTasks(filteredTasks);
-  }, [userState.brainFogLevel, userState.isVeteran, dynamicTasks]);
+  }, [userState.brainFogLevel, userState.isVeteran, dynamicTasks, showHiddenTasks]);
 
   const categories = ['ALL', 'LEGAL', 'LOGISTICS', 'FINANCIAL', 'CEREMONY'];
 
@@ -57,11 +73,18 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
     const link = `https://lighthouse.app/task/${taskId}/delegate`;
     navigator.clipboard.writeText(link);
     alert(`Link copied! Send this to a friend to let them handle this task: ${link}`);
-    
+
     setDynamicTasks(prev => prev.map(t =>
         t.id === taskId ? { ...t, status: 'DELEGATED' } : t
     ));
   };
+
+  // Save showHiddenTasks to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('lighthouse_show_hidden_tasks', showHiddenTasks.toString());
+    }
+  }, [showHiddenTasks]);
 
   const getPriorityColor = (p: string) => {
       switch(p) {
@@ -100,6 +123,39 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
            </button>
          ))}
        </div>
+
+       {/* Brain fog notice and show hidden tasks button */}
+       {userState.brainFogLevel > 3 && (
+         <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+           <div className="flex items-center justify-between">
+             <div className="flex items-center gap-2">
+               <AlertTriangle className="w-4 h-4 text-purple-600" />
+               <p className="text-sm text-purple-800 font-medium">
+                 We've simplified your view to help you focus
+               </p>
+             </div>
+             <button
+               onClick={() => setShowHiddenTasks(!showHiddenTasks)}
+               className="flex items-center gap-1 text-sm font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-100 px-3 py-1 rounded-full transition-colors"
+             >
+               {showHiddenTasks ? (
+                 <>
+                   <EyeOff className="w-3 h-3" />
+                   Hide details
+                 </>
+               ) : (
+                 <>
+                   <Eye className="w-3 h-3" />
+                   Show {dynamicTasks.filter(t =>
+                     (t.category === 'FINANCIAL' && t.priority !== 'URGENT') ||
+                     (t.category === 'LEGAL' && t.priority !== 'URGENT')
+                   ).length} more tasks
+                 </>
+               )}
+             </button>
+           </div>
+         </div>
+       )}
 
        <div className="space-y-3">
           {filteredTasks.length === 0 ? (

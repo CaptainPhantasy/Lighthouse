@@ -60,6 +60,19 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, tasks, documentScans, 
 
       {/* Main Content */}
       <main className="max-w-md mx-auto p-4 pt-6">
+        {/* Primary Crisis: Body Transport for Out-of-State */}
+        {userState.deceasedLocation === 'OUT_OF_STATE' && !userState.deathPronounced && (
+          <div className="mb-6 animate-fade-in">
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="w-5 h-5 text-amber-700" />
+                <h3 className="font-medium text-amber-900">Primary Crisis</h3>
+              </div>
+              <TransportNavigator userState={userState} />
+            </div>
+          </div>
+        )}
+
         {userState.deceasedLocation === 'OUT_OF_STATE' && activeTab === 'TASKS' ? (
           <TransportNavigator userState={userState} />
         ) : (

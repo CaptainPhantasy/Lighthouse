@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import IntakeFlow from './components/IntakeFlow';
+import TransitionView from './components/TransitionView';
 import Dashboard from './components/Dashboard';
 import { AppView, UserState, DocumentScan, Task, ServicePreference } from './types';
 import { INITIAL_USER_STATE } from './constants';
@@ -10,12 +11,17 @@ const App: React.FC = () => {
   const [documentScans, setDocumentScans] = useState<DocumentScan[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
 
-  // Load user state from localStorage on mount
+  // Load state from localStorage on mount
   useEffect(() => {
+    const savedView = localStorage.getItem('lighthouse_view');
     const savedUserState = localStorage.getItem('userState');
     const savedDocumentScans = localStorage.getItem('documentScans');
     const savedTasks = localStorage.getItem('tasks');
     const savedServiceOutline = localStorage.getItem('serviceOutline');
+
+    if (savedView) {
+      setView(savedView as AppView);
+    }
 
     if (savedUserState) {
       const parsed = JSON.parse(savedUserState);
@@ -57,7 +63,13 @@ const App: React.FC = () => {
 
   const handleIntakeComplete = (data: UserState) => {
     setUserState(data);
+    setView(AppView.TRANSITION);
+    localStorage.setItem('lighthouse_view', AppView.TRANSITION);
+  };
+
+  const handleTransitionComplete = () => {
     setView(AppView.DASHBOARD);
+    localStorage.setItem('lighthouse_view', AppView.DASHBOARD);
   };
 
   const handleTaskCreated = (newTask: Task) => {
@@ -82,6 +94,11 @@ const App: React.FC = () => {
     <>
       {view === AppView.INTAKE ? (
         <IntakeFlow onComplete={handleIntakeComplete} />
+      ) : view === AppView.TRANSITION ? (
+        <TransitionView
+          userState={userState}
+          onComplete={handleTransitionComplete}
+        />
       ) : (
         <Dashboard
           userState={userState}
