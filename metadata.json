@@ -1,0 +1,9 @@
+{
+  "name": "Lighthouse",
+  "description": "The Compassionate Estate Orchestrator. An AI-powered guide to help navigate the logistics of loss with empathy and efficiency.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera",
+    "geolocation"
+  ]
+}
