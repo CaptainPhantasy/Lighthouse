@@ -5,7 +5,9 @@ import SmartVault from './SmartVault';
 import CompassionateAssistant from './CompassionateAssistant';
 import DelegationHub from './DelegationHub';
 import TransportNavigator from './TransportNavigator';
-import { LayoutDashboard, FileText, HeartHandshake, AlertTriangle, Plane } from 'lucide-react';
+import ResolutionReport from './ResolutionReport';
+import SupportCircleDashboard from './SupportCircleDashboard';
+import { LayoutDashboard, FileText, HeartHandshake, AlertTriangle, Plane, Award, Users } from 'lucide-react';
 
 interface DashboardProps {
   userState: UserState;
@@ -18,7 +20,9 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ userState, tasks, documentScans, onTaskCreated, onDocumentScan, onServicePreferenceChange, onServiceOutlineChange }) => {
-  const [activeTab, setActiveTab] = useState<'TASKS' | 'VAULT' | 'ASSIST' | 'TRANSPORT'>('TASKS');
+  const [activeTab, setActiveTab] = useState<'TASKS' | 'VAULT' | 'ASSIST' | 'TRANSPORT' | 'RESOLUTION' | 'SUPPORT'>('TASKS');
+
+  const allTasksCompleted = tasks.length > 0 && tasks.every(task => task.status === 'COMPLETED');
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
@@ -63,40 +67,82 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, tasks, documentScans, 
             {activeTab === 'TASKS' && <DelegationHub userState={userState} tasks={tasks} />}
             {activeTab === 'VAULT' && <SmartVault onTaskCreated={onTaskCreated} onDocumentScan={onDocumentScan} />}
             {activeTab === 'ASSIST' && (
-          <CompassionateAssistant
-            userState={userState}
-            documentScans={documentScans}
-            onServicePreferenceChange={onServicePreferenceChange}
-            onServiceOutlineChange={onServiceOutlineChange}
-          />
-        )}
+              <CompassionateAssistant
+                userState={userState}
+                documentScans={documentScans}
+                onServicePreferenceChange={onServicePreferenceChange}
+                onServiceOutlineChange={onServiceOutlineChange}
+              />
+            )}
+            {activeTab === 'TRANSPORT' && <TransportNavigator userState={userState} />}
+            {activeTab === 'RESOLUTION' && (
+              <ResolutionReport
+                userState={userState}
+                tasks={tasks}
+                documentScans={documentScans}
+                serviceOutline={userState.serviceOutline}
+              />
+            )}
+            {activeTab === 'SUPPORT' && (
+              <SupportCircleDashboard
+                userState={userState}
+                tasks={tasks}
+                supportMessages={['Thinking of you during this difficult time.', 'Let us know how we can help.']}
+              />
+            )}
           </>
         )}
       </main>
 
       {/* Bottom Nav */}
+      {/* Show Resolution tab only when all tasks are completed */}
+      {allTasksCompleted && (
+        <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-4 py-2 text-center">
+          <div className="flex items-center justify-center gap-2">
+            <Award className="w-4 h-4" />
+            <span className="text-sm font-medium">All tasks completed! View Resolution Report</span>
+          </div>
+        </div>
+      )}
+
       <nav className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 px-6 py-3 flex justify-around items-center z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <button 
+        <button
             onClick={() => setActiveTab('TASKS')}
             className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'TASKS' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
         >
             <LayoutDashboard className="w-6 h-6" />
             <span className="text-[10px] font-medium tracking-wide">Plan</span>
         </button>
-        <button 
+        <button
             onClick={() => setActiveTab('VAULT')}
             className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'VAULT' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
         >
             <FileText className="w-6 h-6" />
             <span className="text-[10px] font-medium tracking-wide">Vault</span>
         </button>
-        <button 
+        <button
             onClick={() => setActiveTab('ASSIST')}
             className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'ASSIST' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
         >
             <HeartHandshake className="w-6 h-6" />
             <span className="text-[10px] font-medium tracking-wide">Guide</span>
         </button>
+        <button
+            onClick={() => setActiveTab('SUPPORT')}
+            className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'SUPPORT' ? 'text-purple-600' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+            <Users className="w-6 h-6" />
+            <span className="text-[10px] font-medium tracking-wide">Support</span>
+        </button>
+        {allTasksCompleted && (
+          <button
+              onClick={() => setActiveTab('RESOLUTION')}
+              className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'RESOLUTION' ? 'text-green-600' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+              <Award className="w-6 h-6" />
+              <span className="text-[10px] font-medium tracking-wide">Complete</span>
+          </button>
+        )}
       </nav>
     </div>
   );

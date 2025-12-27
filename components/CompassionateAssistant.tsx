@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Send, Volume2, StopCircle, Map as MapIcon, Loader2, Sparkles, Volume1, FileText, Play, DraftingCompass, Skip } from 'lucide-react';
+import { Mic, Send, Volume2, StopCircle, Map as MapIcon, Loader2, Sparkles, Volume1, FileText, Play, DraftingCompass } from 'lucide-react';
 import { streamChatResponse, connectLiveSession, findFuneralHomes, generateSpeech, generateServiceOutline } from '../services/geminiService';
 import { ChatMessage, UserState, DocumentScan, ServicePreference } from '../types';
 import { SERVICE_PREFERENCES, OFFICIANT_QUESTIONS, SERVICE_TEMPLATES } from '../constants';
@@ -28,10 +28,48 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
   ]);
   const [input, setInput] = useState('');
   const [isThinking, setIsThinking] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [recognition, setRecognition] = useState<any>(null);
   const [isLiveActive, setIsLiveActive] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [autoPlay, setAutoPlay] = useState(false);
   const [serviceOutline, setServiceOutline] = useState<string | null>(userState.serviceOutline || null);
+
+  // Initialize speech recognition
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const recognitionInstance = new SpeechRecognition();
+      recognitionInstance.continuous = false;
+      recognitionInstance.interimResults = true;
+      recognitionInstance.lang = 'en-US';
+
+      recognitionInstance.onresult = (event: any) => {
+        const transcript = Array.from(event.results)
+          .map((result: any) => result[0])
+          .map(result => result.transcript)
+          .join('');
+        setInput(transcript);
+      };
+
+      recognitionInstance.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+      };
+
+      recognitionInstance.onend = () => {
+        setIsListening(false);
+      };
+
+      setRecognition(recognitionInstance);
+    }
+
+    return () => {
+      if (recognition) {
+        recognition.stop();
+      }
+    };
+  }, []);
   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false);
   const [questionsAsked, setQuestionsAsked] = useState<string[]>([]);
   const [isEditingOutline, setIsEditingOutline] = useState(false);
@@ -136,10 +174,14 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
     setIsThinking(true);
 
     try {
-      const response = await streamChatResponse([
-        ...messages,
-        userMessage
-      ]);
+      const response = await streamChatResponse(
+        messages.map(m => ({ role: m.role, parts: [{ text: m.content }] })),
+        userMessage.content,
+        (text) => {
+          // Handle streaming chunks if needed
+          console.log('Chunk:', text);
+        }
+      );
 
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -226,11 +268,18 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
   };
 
   const toggleVoiceInput = () => {
-    // Voice input implementation would go here
-    console.log('Voice input toggled');
+    if (isListening) {
+      setIsListening(false);
+      if (recognition) {
+        recognition.stop();
+      }
+    } else {
+      setIsListening(true);
+      if (recognition) {
+        recognition.start();
+      }
+    }
   };
-
-  const isListening = false;
 
   // --- AI Officiant Co-Pilot Functions ---
   const generateServiceOutline = async () => {
@@ -311,16 +360,17 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
       const responses = [];
       for (let i = 0; i < questionsAsked.length; i++) {
         const question = questionsAsked[i];
-        const response = messages.find(m => m.content === question)?.nextSibling?.content || finalResponse;
+        const response = messages.find(m => m.content === question)?.content || finalResponse;
         responses.push(response);
       }
 
-      // Generate real service outline using Gemini API with service preference
+      // Generate real service outline using Gemini API with service preference and document scans
       const result = await generateServiceOutline(
         questionsAsked,
         responses,
         userState.deceasedName,
-        servicePreference
+        servicePreference,
+        documentScans
       );
 
       setServiceOutline(result.text);
@@ -585,13 +635,37 @@ ${template.closingSection}`;
         <div className="border-t border-gray-800 pt-4">
           <div className="flex gap-2">
             {mode === 'VOICE' ? (
-              <button
-                onClick={toggleVoiceInput}
-                disabled={isListening}
-                className="bg-red-500/20 text-red-400 border border-red-500/50 p-3 rounded-full hover:bg-red-500 hover:text-white transition-all disabled:opacity-50"
-              >
-                {isListening ? <StopCircle className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-              </button>
+              <div className="flex-1 flex flex-col items-center">
+                {isListening && (
+                  <div className="mb-2 text-red-400 text-sm">
+                    Listening... Speak now
+                  </div>
+                )}
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                  placeholder="Speak or type your message..."
+                  className="flex-1 bg-gray-800/50 border border-gray-700 rounded-full px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                />
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={toggleVoiceInput}
+                    disabled={isListening}
+                    className="bg-red-500/20 text-red-400 border border-red-500/50 p-3 rounded-full hover:bg-red-500 hover:text-white transition-all disabled:opacity-50"
+                  >
+                    {isListening ? <StopCircle className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  </button>
+                  <button
+                    onClick={handleSend}
+                    disabled={!input.trim()}
+                    className="bg-blue-500/20 text-blue-400 border border-blue-500/50 p-3 rounded-full hover:bg-blue-500 hover:text-white transition-all disabled:opacity-50"
+                  >
+                    <Send className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
             ) : (
               <>
                 <input

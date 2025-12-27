@@ -3,6 +3,25 @@ import { GoogleGenAI, LiveServerMessage, Modality, Type, FunctionDeclaration } f
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
+// Lighthouse Officiant Co-Pilot System Instruction
+export const SYSTEM_INSTRUCTION_OFFICIANT = `You are the Lighthouse Officiant Co-Pilot. Your goal is to support an individual who has been thrust into the role of officiating a funeral service.
+
+Tone and Style Guidelines:
+
+Empathetic & Steady: Use language that is warm, grounded, and trauma-informed. Avoid clinical terms. Prefer 'restoration' over 'cleanup' and 'honoring' over 'processing'.
+
+Collaborative: Position yourself as a silent partner. Use phrases like 'We might consider...' or 'A beautiful way to frame this could be...'
+
+Honest & Authentic: Do not use clichés. If a user provides a difficult memory, acknowledge the complexity of human life with grace.
+
+Output Requirements:
+
+Structure: Provide a 20-minute timeline with specific segments: Opening, Eulogy Draft, Shared Memories, Reading, and Closing.
+
+The Eulogy Draft: Write a 500-word personalized opening based strictly on the anecdotes provided in the probing questions.
+
+Formatting: Use clear Markdown headers. Surround the Eulogy section with specific tags (e.g., [EULOGY_START] and [EULOGY_END]) so the application can extract it for Text-to-Speech playback.`;
+
 // --- Audio Encoding/Decoding Utils for Live API ---
 function encodeAudio(bytes: Uint8Array) {
   let binary = '';
@@ -336,7 +355,30 @@ SHIPPING RESTRICTIONS:
   }
 }
 
-export const generateServiceOutline = async (questions: string[], responses: string[], deceasedName?: string, preference?: string) => {
+// Helper function to extract personal info from document scans
+function extractPersonalInfo(documentScans: any[]): { fullName?: string; birthDate?: string; survivors?: string } {
+  const personalInfo: { fullName?: string; birthDate?: string; survivors?: string } = {};
+
+  documentScans.forEach(scan => {
+    if (scan.documentType === 'ID' || scan.documentType === 'OBITUARY') {
+      // Extract entities from the scan
+      scan.entities?.forEach((entity: any) => {
+        const key = entity.key.toLowerCase();
+        if (key.includes('name') || key.includes('full name')) {
+          personalInfo.fullName = entity.value;
+        } else if (key.includes('birth') || key.includes('dob')) {
+          personalInfo.birthDate = entity.value;
+        } else if (key.includes('survivor') || key.includes('family') || key.includes('relatives')) {
+          personalInfo.survivors = entity.value;
+        }
+      });
+    }
+  });
+
+  return personalInfo;
+}
+
+export const generateServiceOutline = async (questions: string[], responses: string[], deceasedName?: string, preference?: string, documentScans?: any[]) => {
   try {
     // Define structure based on preference
     const getStructure = () => {
@@ -373,14 +415,25 @@ export const generateServiceOutline = async (questions: string[], responses: str
 
     const structure = getStructure();
 
-    const systemInstruction = `You are Lighthouse, an AI officiant co-pilot helping create a meaningful funeral service. Based on the responses gathered, create a structured, compassionate 20-minute funeral service outline.
+    // Extract personal info from document scans
+    const personalInfo = documentScans ? extractPersonalInfo(documentScans) : {};
+
+    const systemInstruction = `${SYSTEM_INSTRUCTION_OFFICIANT}
+
+Additional Context:
+- Deceased Name: ${deceasedName || 'Your Loved One'}
+- Service Preference: ${preference || 'SECULAR'}
+- Personal Details from Documents: ${personalInfo ? `Full Name: ${personalInfo.fullName || 'Not provided'}, Birth Date: ${personalInfo.birthDate || 'Not provided'}, Survivors: ${personalInfo.survivors || 'Not specified'}` : 'No documents scanned'}
+
+Based on the responses gathered and any document information, create a structured, compassionate 20-minute funeral service outline.
 
 ${structure.opening}
 ${structure.openingTemplate}
 
 ## 2. Eulogy (6 minutes)
-*[Eulogy content goes here - this section will be parsed for TTS playback]*
-*Create a heartfelt eulogy based on the responses, approximately 500 words*
+[EULOGY_START]
+*[Create a heartfelt eulogy based on the responses, approximately 500 words. Use the personal information above if available.]*
+[EULOGY_END]
 
 ## 3. Shared Memories (4 minutes)
 *Open the floor for others to share their memories*
@@ -399,7 +452,8 @@ Important Instructions:
 - Reference specific values and characteristics from the responses when available
 - Create an authentic, heartfelt opening line for the eulogy
 - Ensure total time allocation adds up to 20 minutes
-- Use gentle, inclusive language that honors their memory`;
+- Use gentle, inclusive language that honors their memory
+- Surround the eulogy with [EULOGY_START] and [EULOGY_END] tags for TTS extraction`;
 
     const conversation = [
       {
@@ -448,14 +502,7 @@ Important Instructions:
       }
     ];
 
-    const response = await ai.generateContent({
-      model: "gemini-3-flash-exp",
-      contents: conversation,
-      config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.7, // Higher temperature for creative content
-      }
-    });
+    const response = await ai.generateContent(conversation);
 
     const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) {

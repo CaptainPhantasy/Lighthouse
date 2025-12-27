@@ -43,12 +43,15 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   isThinking?: boolean;
+  nextSibling?: string;
 }
 
 export interface DocumentScan {
   id: string;
   name: string;
   type: 'WILL' | 'INSURANCE' | 'ID' | 'OTHER';
+  documentType?: string;
+  scannedDate?: string;
   summary?: string;
   extractedData?: Record<string, any>;
   url: string; // Base64 or Object URL
