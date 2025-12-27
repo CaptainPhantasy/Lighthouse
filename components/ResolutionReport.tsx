@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserState, Task, DocumentScan } from '../types';
-import { CheckCircle, FileText, Download, Shield, Trash2, Heart } from 'lucide-react';
+import { CheckCircle, FileText, Download, Shield, Trash2, Heart, AlertCircle } from 'lucide-react';
+import { sanitizeData } from '../utils/encryption';
 
 interface ResolutionReportProps {
   userState: UserState;
@@ -60,7 +61,15 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
     setDocumentRecords(records);
   }, [tasks, documentScans]);
 
-  const allTasksCompleted = tasks.every(task => task.status === 'COMPLETED');
+  // Check if all urgent and high priority tasks are completed
+  const allUrgentAndHighCompleted = tasks.every(task => {
+    if (task.priority === 'URGENT' || task.priority === 'HIGH') {
+      return task.status === 'COMPLETED';
+    }
+    return true;
+  });
+
+  const allTasksCompleted = tasks.length > 0 && tasks.every(task => task.status === 'COMPLETED');
   const completionPercentage = Math.round((completedTasks.length / tasks.length) * 100);
 
   const generateResolutionReport = () => {
@@ -109,18 +118,26 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
     setIsGenerating(false);
   };
 
-  const sanitizeData = () => {
-    if (confirm('This will permanently delete sensitive PII (Social Security Numbers, Account Numbers) while preserving memories. This action cannot be undone. Are you sure?')) {
+  const sanitizeAndDestroy = () => {
+    if (confirm('Are you sure you want to permanently destroy all sensitive data while preserving memories? This action cannot be undone.')) {
       setIsSanitizing(true);
 
-      // Simulate data sanitization
+      // Clear sensitive data from localStorage
+      localStorage.removeItem('userState');
+      localStorage.removeItem('tasks');
+      localStorage.removeItem('documentScans');
+      localStorage.removeItem('serviceOutline');
+
+      // Reset state (call parent callback if available)
+      if (onSanitizeData) {
+        onSanitizeData();
+      }
+
+      // Update local state
       setTimeout(() => {
-        if (onSanitizeData) {
-          onSanitizeData();
-        }
         setIsSanitizing(false);
-        alert('Sensitive data has been sanitized. Your memories are preserved.');
-      }, 2000);
+        alert('Sensitive data has been permanently destroyed. Memories have been preserved.');
+      }, 1000);
     }
   };
 
@@ -188,28 +205,21 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
     }
   };
 
-  if (!allTasksCompleted) {
+  if (!allUrgentAndHighCompleted) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-center p-8">
-        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-          <Clock className="w-8 h-8 text-gray-400" />
-        </div>
-        <h3 className="text-xl font-semibold text-gray-800 mb-2">
-          Almost There...
-        </h3>
-        <p className="text-gray-600 mb-4">
-          Complete all remaining tasks to generate your Resolution Report
+      <div className="bg-amber-50 border border-amber-200 p-6 rounded-xl text-center">
+        <AlertCircle className="w-12 h-12 text-amber-600 mx-auto mb-4" />
+        <h2 className="text-xl font-semibold text-amber-800 mb-2">Resolution Not Complete</h2>
+        <p className="text-amber-700 mb-4">
+          Please complete all URGENT and HIGH priority tasks in the Plan tab before generating the Resolution Audit.
         </p>
-        <div className="w-full max-w-md">
-          <div className="bg-gray-200 rounded-full h-2">
-            <div
-              className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-              style={{ width: `${completionPercentage}%` }}
-            ></div>
-          </div>
-          <p className="text-sm text-gray-500 mt-2">
-            {completionPercentage}% Complete ({completedTasks.length} of {tasks.length} tasks)
-          </p>
+        <div className="flex justify-center gap-2 flex-wrap">
+          <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium">
+            {tasks.filter(t => t.priority === 'URGENT' && t.status !== 'COMPLETED').length} URGENT tasks remaining
+          </span>
+          <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium">
+            {tasks.filter(t => t.priority === 'HIGH' && t.status !== 'COMPLETED').length} HIGH tasks remaining
+          </span>
         </div>
       </div>
     );
@@ -270,12 +280,12 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
           Export as PDF
         </button>
         <button
-          onClick={sanitizeData}
+          onClick={sanitizeAndDestroy}
           disabled={isSanitizing}
           className="flex-1 bg-red-50 text-red-600 py-3 rounded-lg hover:bg-red-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
         >
           <Shield className="w-5 h-5" />
-          {isSanitizing ? 'Sanitizing...' : 'Sanitize Data'}
+          {isSanitizing ? 'Destroying Data...' : 'Destroy Sensitive Data'}
         </button>
       </div>
 
@@ -312,11 +322,11 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
               After everything is complete, you may want to permanently delete sensitive information while preserving the memories and stories.
             </p>
             <button
-              onClick={sanitizeData}
+              onClick={sanitizeAndDestroy}
               disabled={isSanitizing}
               className="bg-amber-500 text-white px-4 py-2 rounded-lg hover:bg-amber-600 transition-colors text-sm disabled:opacity-50"
             >
-              {isSanitizing ? 'Sanitizing...' : 'Sanitize Sensitive Data'}
+              {isSanitizing ? 'Destroying...' : 'Destroy Sensitive Data'}
             </button>
           </div>
         </div>

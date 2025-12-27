@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { IntakeStep, UserState } from '../types';
 import { TEXTS, INITIAL_USER_STATE } from '../constants';
-import { ShieldCheck, MapPin, Stethoscope, User, BrainCircuit, CheckCircle, RotateCcw } from 'lucide-react';
+import { ShieldCheck, MapPin, Stethoscope, User, BrainCircuit, CheckCircle, RotateCcw, Mic, MicOff } from 'lucide-react';
+import useSpeechToText from '../hooks/useSpeechToText';
 
 interface IntakeFlowProps {
   onComplete: (data: UserState) => void;
@@ -29,6 +30,9 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
       return INITIAL_USER_STATE;
   });
 
+  // Voice input for deceased name
+  const { isListening: isListeningForVoice, transcript: voiceTranscript, startListening: startVoiceListening, stopListening: stopVoiceListening, browserSupportsSpeechRecognition } = useSpeechToText();
+
   // Auto-save effect
   useEffect(() => {
     localStorage.setItem('lighthouse_intake_step', step);
@@ -54,6 +58,15 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
           setFormData(INITIAL_USER_STATE);
       }
   }
+
+  const toggleVoiceInput = () => {
+    if (isListeningForVoice) {
+      stopVoiceListening();
+    } else {
+      setFormData({ ...formData, deceasedName: voiceTranscript });
+      startVoiceListening({ continuous: true, interimResults: true });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-6 max-w-md mx-auto relative">
@@ -150,21 +163,50 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
           <div className="space-y-6 w-full">
             <User className="w-12 h-12 text-slate-400 mx-auto" />
             <h2 className="text-xl font-medium text-center text-slate-800">{TEXTS.identity_question}</h2>
-            <input
-              type="text"
-              placeholder="Full Legal Name"
-              value={formData.deceasedName}
-              className="w-full p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-              onChange={(e) => setFormData({ ...formData, deceasedName: e.target.value })}
-            />
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Full Legal Name"
+                value={formData.deceasedName || voiceTranscript}
+                className="w-full p-4 pr-12 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                onChange={(e) => setFormData({ ...formData, deceasedName: e.target.value })}
+              />
+              {browserSupportsSpeechRecognition && (
+                <button
+                  type="button"
+                  onClick={toggleVoiceInput}
+                  className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-lg transition-colors ${
+                    isListeningForVoice
+                      ? 'bg-red-100 text-red-600 hover:bg-red-200'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                  title={isListeningForVoice ? "Stop voice input" : "Use voice input"}
+                >
+                  {isListeningForVoice ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                </button>
+              )}
+            </div>
+            {isListeningForVoice && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                <div className="flex items-center justify-center gap-2 text-blue-600 text-sm">
+                  <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+                  <span>Listening... Speak the full name</span>
+                </div>
+              </div>
+            )}
+            {voiceTranscript && formData.deceasedName === voiceTranscript && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                <p className="text-green-700 text-sm">Voice input recognized: "{voiceTranscript}"</p>
+              </div>
+            )}
             <div className="pt-4">
               <p className="text-slate-600 mb-2 text-center">{TEXTS.veteran_question}</p>
               <div className="flex gap-4 justify-center">
-                 <button 
+                 <button
                   onClick={() => handleNext(IntakeStep.BRAIN_FOG, { isVeteran: true })}
                   className={`px-6 py-2 rounded-full border transition-all ${formData.isVeteran ? 'bg-blue-50 border-blue-400 text-blue-700' : 'border-slate-300 hover:bg-slate-50'}`}
                  >Yes</button>
-                 <button 
+                 <button
                   onClick={() => handleNext(IntakeStep.BRAIN_FOG, { isVeteran: false })}
                   className="px-6 py-2 rounded-full border border-slate-300 hover:bg-slate-50"
                  >No</button>

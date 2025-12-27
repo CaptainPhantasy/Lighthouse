@@ -1,7 +1,9 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { Camera, FileText, Loader2, Upload, Filter, Tag, CheckCircle } from 'lucide-react';
-import { analyzeDocument } from '../services/geminiService';
+import { Camera, FileText, Loader2, Upload, Filter, Tag, CheckCircle, FileDown, Copy } from 'lucide-react';
+import { analyzeDocument, generateNotificationDraft } from '../services/geminiService';
 import { DocumentScan, Task } from '../types';
+import { encryptObject, decryptObject } from '../utils/encryption';
+import { ENCRYPTION_PASSWORD } from '../constants';
 
 interface SmartVaultProps {
   onTaskCreated?: (task: Task) => void;
@@ -13,6 +15,10 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan }
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string>('ALL');
   const [recentlyCreatedTask, setRecentlyCreatedTask] = useState<string | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<DocumentScan | null>(null);
+  const [notificationDraft, setNotificationDraft] = useState<string>('');
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
+  const [decryptedData, setDecryptedData] = useState<{[key: string]: any}>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,12 +129,28 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan }
           }
         }
 
-        // Notify parent about new document scan
-        if (onDocumentScan) {
-          onDocumentScan(newDoc);
-        }
+        // Encrypt document data before storing
+        try {
+          const encryptedDoc = { ...newDoc };
+          if (newDoc.extractedData) {
+            const encryptedData = await encryptObject(newDoc.extractedData, ENCRYPTION_PASSWORD);
+            encryptedDoc.extractedData = encryptedData;
+          }
 
-        setDocuments(prev => [newDoc, ...prev]);
+          // Notify parent about new document scan
+          if (onDocumentScan) {
+            onDocumentScan(newDoc);
+          }
+
+          setDocuments(prev => [encryptedDoc, ...prev]);
+        } catch (encryptionError) {
+          console.error('Failed to encrypt document data:', encryptionError);
+          // Save without encryption if encryption fails
+          if (onDocumentScan) {
+            onDocumentScan(newDoc);
+          }
+          setDocuments(prev => [newDoc, ...prev]);
+        }
       } catch (err) {
         alert("Could not analyze document. Please try a clearer photo.");
       } finally {
@@ -137,6 +159,63 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan }
     };
     reader.readAsDataURL(file);
   };
+
+  const handleGenerateDraft = async (document: DocumentScan) => {
+    const decryptedExtractedData = decryptedData[document.id];
+    if (!decryptedExtractedData || decryptedExtractedData.length === 0) return;
+
+    setIsGeneratingDraft(true);
+    try {
+      const draft = await generateNotificationDraft(document.type, decryptedExtractedData);
+      setNotificationDraft(draft.text);
+      setSelectedDocument(document);
+    } catch (error) {
+      alert("Could not generate notification draft. Please try again.");
+    } finally {
+      setIsGeneratingDraft(false);
+    }
+  };
+
+  const handleCopyToClipboard = () => {
+    if (notificationDraft) {
+      navigator.clipboard.writeText(notificationDraft).then(() => {
+        alert("Notification draft copied to clipboard!");
+      }).catch(() => {
+        alert("Failed to copy to clipboard. Please copy manually.");
+      });
+    }
+  };
+
+  const handleCloseModal = () => {
+    setSelectedDocument(null);
+    setNotificationDraft('');
+  };
+
+  // Decrypt document data when documents change
+  useEffect(() => {
+    const decryptDocuments = async () => {
+      const decrypted: {[key: string]: any} = {};
+
+      for (const doc of documents) {
+        if (doc.extractedData && typeof doc.extractedData === 'object' && 'encrypted' in doc.extractedData) {
+          try {
+            const decryptedData = await decryptObject(doc.extractedData, ENCRYPTION_PASSWORD);
+            decrypted[doc.id] = decryptedData;
+          } catch (error) {
+            console.error(`Failed to decrypt document ${doc.id}:`, error);
+            decrypted[doc.id] = [];
+          }
+        } else {
+          // Already decrypted
+          decrypted[doc.id] = doc.extractedData;
+        }
+      }
+
+      setDecryptedData(decrypted);
+    };
+
+    decryptDocuments();
+  }, [documents]);
 
   // Get unique document types for filter tabs
   const docTypes = useMemo(() => {
@@ -230,20 +309,92 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan }
               </div>
               <p className="text-sm text-slate-600 mt-1 line-clamp-2">{doc.summary}</p>
               
-              {doc.extractedData && (
-                <div className="mt-3 bg-slate-50 p-3 rounded text-xs space-y-1">
-                  {doc.extractedData.map((item: any, i: number) => (
-                    <div key={i} className="flex justify-between border-b border-slate-200 pb-1 last:border-0">
-                      <span className="text-slate-500 truncate mr-2">{item.key}:</span>
-                      <span className="font-medium text-slate-800 truncate max-w-[50%]">{item.value}</span>
-                    </div>
-                  ))}
-                </div>
+              {decryptedData[doc.id] && (
+                <>
+                  <div className="mt-3 bg-slate-50 p-3 rounded text-xs space-y-1">
+                    {decryptedData[doc.id].map((item: any, i: number) => (
+                      <div key={i} className="flex justify-between border-b border-slate-200 pb-1 last:border-0">
+                        <span className="text-slate-500 truncate mr-2">{item.key}:</span>
+                        <span className="font-medium text-slate-800 truncate max-w-[50%]">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => handleGenerateDraft(doc)}
+                    className="mt-3 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors"
+                  >
+                    <FileDown className="w-3 h-3" />
+                    Auto-Draft Letter
+                  </button>
+                </>
               )}
             </div>
           </div>
         ))}
       </div>
+
+      {/* Notification Draft Modal */}
+      {selectedDocument && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-slate-200">
+              <div className="flex justify-between items-center">
+                <h3 className="font-semibold text-lg">
+                  Auto-Draft Letter - {selectedDocument.type}
+                </h3>
+                <button
+                  onClick={handleCloseModal}
+                  className="text-slate-400 hover:text-slate-600"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-sm text-slate-600 mt-1">
+                AI-generated notification letter for {selectedDocument.type.toLowerCase()}
+              </p>
+            </div>
+
+            <div className="flex-1 p-4 overflow-auto">
+              {isGeneratingDraft ? (
+                <div className="flex items-center justify-center h-48">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                  <span className="ml-2 text-sm text-slate-600">Generating letter...</span>
+                </div>
+              ) : (
+                <div className="prose prose-sm max-w-none">
+                  <pre className="whitespace-pre-wrap text-sm text-slate-700 font-mono">
+                    {notificationDraft}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 bg-slate-50">
+              <div className="flex justify-between items-center">
+                <div className="text-xs text-slate-500">
+                  You can edit this letter before copying or sending
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCopyToClipboard}
+                    className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Copy to Clipboard
+                  </button>
+                  <button
+                    onClick={handleCloseModal}
+                    className="px-3 py-2 bg-slate-200 text-slate-700 rounded-lg text-sm hover:bg-slate-300 transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { MOCK_TASKS, TEXTS } from '../constants';
 import { Task, UserState } from '../types';
-import { Share2, CheckCircle, Circle, Clock, Filter, AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import { Share2, CheckCircle, Circle, Clock, Filter, AlertTriangle, Eye, EyeOff, MapPin, Check } from 'lucide-react';
+import LocalLegalGuide from './LocalLegalGuide';
 
 interface DelegationHubProps {
   userState: UserState;
@@ -9,6 +10,13 @@ interface DelegationHubProps {
 }
 
 const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
+  // Toast notification state
+  const [toast, setToast] = useState<{message: string, visible: boolean}>({message: '', visible: false});
+
+  const showToast = (message: string) => {
+    setToast({message, visible: true});
+    setTimeout(() => setToast({message: '', visible: false}), 3000);
+  };
   const [dynamicTasks, setDynamicTasks] = useState<Task[]>(tasks);
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
   const [showHiddenTasks, setShowHiddenTasks] = useState(() => {
@@ -18,6 +26,14 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
       return saved === 'true';
     }
     return false;
+  });
+
+  // Check if all urgent and high priority tasks are completed
+  const allUrgentAndHighCompleted = tasks.every(task => {
+    if (task.priority === 'URGENT' || task.priority === 'HIGH') {
+      return task.status === 'COMPLETED';
+    }
+    return true;
   });
 
   // Filter tasks based on brain fog level
@@ -72,11 +88,20 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
     // In a real app, this generates a unique link
     const link = `https://lighthouse.app/task/${taskId}/delegate`;
     navigator.clipboard.writeText(link);
-    alert(`Link copied! Send this to a friend to let them handle this task: ${link}`);
+
+    // Show toast notification instead of alert
+    showToast(`Link copied! Send this to a friend to let them handle this task: ${link}`);
 
     setDynamicTasks(prev => prev.map(t =>
         t.id === taskId ? { ...t, status: 'DELEGATED' } : t
     ));
+  };
+
+  const handleTaskComplete = (taskId: string) => {
+    setDynamicTasks(prev => prev.map(t =>
+        t.id === taskId ? { ...t, status: 'COMPLETED' } : t
+    ));
+    showToast('Task marked as complete!');
   };
 
   // Save showHiddenTasks to localStorage when it changes
@@ -98,14 +123,26 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
     ? tasks 
     : tasks.filter(t => t.category === activeCategory);
 
-  return (
+return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {toast.visible && (
+        <div className="fixed top-4 right-4 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg z-50 animate-fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-4 h-4" />
+            <span>{toast.message}</span>
+          </div>
+        </div>
+      )}
        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <h2 className="text-xl font-medium text-slate-800 mb-1">Restoration Plan</h2>
           <p className="text-slate-500 text-sm">
-              You don't have to do this alone. Use the <span className="font-medium text-blue-600">Support Circle</span> button to generate task links.
+              You don't have to do this alone. Use the <span className="font-medium text-blue-600">Ask Support Circle</span> button to generate task links you can share with friends and family.
           </p>
        </div>
+
+       {/* Local Legal Guide - Only show for users with brain fog level < 4 */}
+       <LocalLegalGuide userState={userState} />
 
        {/* Category Filters */}
        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
@@ -185,12 +222,22 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
                   </div>
                   
                   <div className="flex items-start gap-3">
-                      <button className="mt-1 text-slate-300 hover:text-green-500">
-                          <Circle className="w-5 h-5" />
+                      <button
+                        onClick={() => handleTaskComplete(task.id)}
+                        className={`mt-1 ${task.status === 'COMPLETED' ? 'text-green-500' : 'text-slate-300 hover:text-green-500'} transition-colors`}
+                      >
+                          {task.status === 'COMPLETED' ? (
+                              <Check className="w-5 h-5" />
+                          ) : (
+                              <Circle className="w-5 h-5" />
+                          )}
                       </button>
-                      <div>
-                          <h3 className="text-slate-800 font-medium">{task.title}</h3>
+                      <div className={`${task.status === 'COMPLETED' ? 'opacity-60' : ''}`}>
+                          <h3 className={`text-slate-800 font-medium ${task.status === 'COMPLETED' ? 'line-through' : ''}`}>{task.title}</h3>
                           <p className="text-sm text-slate-500 mt-1 leading-relaxed">{task.description}</p>
+                          {task.status === 'COMPLETED' && (
+                            <p className="text-xs text-green-600 mt-1">✓ Completed</p>
+                          )}
                       </div>
                   </div>
               </div>

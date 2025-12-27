@@ -302,6 +302,125 @@ export const generateSpeech = async (text: string): Promise<AudioBuffer | null> 
   }
 }
 
+export async function generateNotificationDraft(documentType: string, entities: any): Promise<{ text: string }> {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-preview",
+      contents: [{
+        parts: [{
+          text: `Create a professional, empathetic notification letter for ${documentType} based on the extracted information.
+
+Extracted Information:
+${entities.map((entity: any) => `${entity.key}: ${entity.value}`).join('\n')}
+
+Please generate:
+1. A formal letter with a compassionate tone
+2. Include all relevant details from the extracted information
+3. Address to the appropriate entity (e.g., insurance carrier, bank, financial institution)
+4. Maintain a respectful and professional tone while being understanding of the circumstances
+5. Include placeholders for any missing information that needs to be filled in by the user
+
+Format the letter as a complete, ready-to-use document that the user can copy and send.`
+        }]
+      }]
+    });
+
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+      throw new Error('No response from AI');
+    }
+
+    return { text };
+  } catch (e) {
+    console.error("Notification Draft Error", e);
+    // Return fallback notification draft
+    return {
+      text: `
+Dear [Recipient Name],
+
+I am writing to inform you about the recent passing of [Deceased Name], who was the [Relationship/Policy Holder] for this ${documentType} account.
+
+The following information has been extracted from relevant documents:
+${entities.map((entity: any) => `${entity.key}: ${entity.value}`).join('\n')}
+
+Please advise on the next steps required to process this matter, including any documentation needed to update the account or initiate a claim.
+
+Thank you for your attention to this important matter during this difficult time.
+
+Sincerely,
+[Your Name]
+[Your Contact Information]
+      `
+    };
+  }
+}
+
+export async function getLocalProbateRequirements(location: string): Promise<{ text: string }> {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-preview",
+      contents: [{
+        parts: [{
+          text: `I need local probate requirements for ${location}. Please search for and provide:
+1. County-specific filing fees for probate
+2. Address and contact information for the nearest probate court
+3. Small Estate Affidavit forms and eligibility requirements
+4. Local probate process timeline and requirements
+5. Contact information for probate clerks
+
+Return this information in a clear, structured format with practical guidance.`
+        }]
+      }],
+      config: {
+        tools: [{ googleSearch: {} }],
+        temperature: 0.1, // Low temperature for factual accuracy
+      }
+    });
+
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+      throw new Error('No response from AI');
+    }
+
+    return { text };
+  } catch (e) {
+    console.error("Probate Requirements Error", e);
+    // Return fallback information if API fails
+    return {
+      text: `
+LOCAL PROBATE REQUIREMENTS FOR ${location}:
+
+1. PROBATE COURT INFORMATION:
+   - Nearest Court: [County Name] Probate Court
+   - Address: [Court Address]
+   - Phone: [Court Phone Number]
+   - Website: [Court Website]
+
+2. FILING FEES:
+   - Basic Probate Filing: [Fee Amount]
+   - Small Estate Fee: [Reduced Fee Amount]
+   - Emergency Filing Fee: [Additional Fee]
+
+3. SMALL ESTATE AFFIDAVIT:
+   - Maximum Value: [Typically $50,000-$100,000]
+   - Waiting Period: [Typically 30-90 days]
+   - Required Forms: Small Estate Affidavit, Death Certificate
+   - Notarization Required: Yes
+
+4. PROCESS TIMELINE:
+   - Initial Filing: 2-4 weeks
+   - creditor Notice Period: 30-90 days
+   - Final Distribution: 4-8 months
+
+5. NEXT STEPS:
+   - Contact the probate clerk's office for specific forms
+   - Gather required documentation (death certificate, will, asset inventory)
+   - Consult with an estate attorney if estate is complex
+      `
+    };
+  }
+}
+
 export async function getTransportLaws(location: string) {
   try {
     // Use googleSearch tool to get current regulations

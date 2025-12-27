@@ -27,6 +27,12 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
     }
   ]);
   const [input, setInput] = useState('');
+  const [toast, setToast] = useState<{message: string, visible: boolean}>({message: '', visible: false});
+
+  const showToast = (message: string) => {
+    setToast({message, visible: true});
+    setTimeout(() => setToast({message: '', visible: false}), 3000);
+  };
   const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [recognition, setRecognition] = useState<any>(null);
@@ -267,17 +273,59 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
     }
   };
 
-  const toggleVoiceInput = () => {
+  const toggleVoiceInput = async () => {
     if (isListening) {
       setIsListening(false);
       if (recognition) {
         recognition.stop();
+      }
+      // Cleanup transcribed input and clean it using AI
+      if (input.trim()) {
+        try {
+          const cleanedInput = await cleanUpTranscription(input);
+          setInput(cleanedInput);
+          // Add cleaned input to messages
+          const cleanedMessage: ChatMessage = {
+            id: Date.now().toString(),
+            role: 'user',
+            content: cleanedInput,
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, cleanedMessage]);
+        } catch (error) {
+          console.error('Error cleaning up transcription:', error);
+          // Keep original input if cleanup fails
+          const originalMessage: ChatMessage = {
+            id: Date.now().toString(),
+            role: 'user',
+            content: input,
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, originalMessage]);
+        }
       }
     } else {
       setIsListening(true);
       if (recognition) {
         recognition.start();
       }
+    }
+  };
+
+  // AI function to clean up transcribed speech while preserving emotional content
+  const cleanUpTranscription = async (text: string): Promise<string> => {
+    try {
+      const response = await streamChatResponse(
+        [],
+        `Please clean up this transcribed speech by removing filler words (um, uh, like, you know, so, etc.) while preserving the emotional content and meaning. Return only the cleaned text without any explanations or additions. Original text: "${text}"`,
+        (chunk) => {}
+      );
+
+      // Extract the cleaned response from the streaming
+      return response.trim();
+    } catch (error) {
+      console.error('Error cleaning up transcription:', error);
+      return text; // Return original text if AI cleanup fails
     }
   };
 
@@ -453,12 +501,21 @@ ${template.closingSection}`;
       console.error('Error generating speech:', error);
       setIsPlayingAudio(false);
       // Show gentle error message
-      alert("I'm having trouble reading this aloud right now, but your text is saved below for you to read.");
+      showToast("I'm having trouble reading this aloud right now, but your text is saved below for you to read.");
     }
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
+      {/* Toast Notification */}
+      {toast.visible && (
+        <div className="fixed top-4 right-4 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg z-50 animate-fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-4 h-4" />
+            <span>{toast.message}</span>
+          </div>
+        </div>
+      )}
       {/* Service Preference Selector */}
       <div className="mb-4 p-4 bg-gray-900/30 rounded-lg border border-gray-800">
         <label className="block text-sm font-medium text-gray-300 mb-2">

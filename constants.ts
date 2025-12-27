@@ -1,5 +1,8 @@
 import { UserState, Task } from './types';
 
+// Encryption password - in production this should come from user input or derived from user biometrics
+export const ENCRYPTION_PASSWORD = process.env.ENCRYPTION_PASSWORD || 'lighthouse_default_key_2024';
+
 export const INITIAL_USER_STATE: UserState = {
   name: '',
   isSafe: false,

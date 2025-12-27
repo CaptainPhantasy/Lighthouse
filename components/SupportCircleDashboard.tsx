@@ -93,8 +93,27 @@ const SupportCircleDashboard: React.FC<SupportCircleDashboardProps> = ({
   };
 
   const handlePlayEulogy = async () => {
-    // This would play the eulogy for the support circle
-    console.log('Playing eulogy for support circle...');
+    try {
+      // Check if speech synthesis is available
+      if ('speechSynthesis' in window) {
+        // Create a eulogy text (in real implementation, this would come from user input)
+        const eulogyText = `A eulogy for ${userState.deceasedName || 'our beloved friend'}. This is a time to remember and celebrate their life, the love they shared, and the legacy they leave behind.`;
+
+        // Create utterance
+        const utterance = new SpeechSynthesisUtterance(eulogyText);
+        utterance.rate = 0.8;
+        utterance.pitch = 1;
+        utterance.volume = 1;
+
+        // Play the eulogy
+        window.speechSynthesis.speak(utterance);
+      } else {
+        alert('Speech synthesis is not supported in your browser.');
+      }
+    } catch (error) {
+      console.error('Error playing eulogy:', error);
+      alert('Unable to play eulogy. Please try again.');
+    }
   };
 
   const handleDownloadSummary = () => {
@@ -131,6 +150,11 @@ const SupportCircleDashboard: React.FC<SupportCircleDashboardProps> = ({
           <p className="text-gray-600">
             Friends and family have come together to help during this time
           </p>
+          <div className="mt-4 bg-purple-50 border border-purple-200 rounded-lg p-4 inline-block">
+            <p className="text-sm text-purple-800">
+              <strong>Note:</strong> To generate task delegation links for specific funeral tasks, go to the <strong>Plan</strong> tab and use the "Ask Support Circle" button on each task.
+            </p>
+          </div>
         </div>
 
         {/* Care Calendar Section */}
