@@ -11,6 +11,49 @@ if (!apiKey || apiKey.length === 0) {
 
 const ai = new GoogleGenAI({ apiKey });
 
+// ============================================================================
+// PHASE 2: 2025 INTELLIGENCE LAYER
+// ============================================================================
+
+// Context Cache for the user's initial story - persists across all sessions
+// This ensures the AI always "remembers" the emotional details shared during onboarding
+let storyContextCache: string | null = null;
+
+/**
+ * Sets the cached story context for all subsequent AI interactions
+ * This should be called once during VoiceIntro onboarding completion
+ */
+export function setStoryContext(story: string): void {
+  storyContextCache = story;
+  console.log('[Phase 2] Story context cached for session:', story.substring(0, 50) + '...');
+}
+
+/**
+ * Gets the cached story context
+ */
+export function getStoryContext(): string | null {
+  return storyContextCache;
+}
+
+/**
+ * Clears the cached story context (for logout/new session)
+ */
+export function clearStoryContext(): void {
+  storyContextCache = null;
+  console.log('[Phase 2] Story context cleared');
+}
+
+/**
+ * Builds system instruction with cached story context as prefix
+ * Ensures every AI session has access to the full emotional narrative
+ */
+function buildSystemInstruction(baseInstruction: string): string {
+  if (storyContextCache) {
+    return `[USER'S STORY - ALWAYS REMEMBER THESE DETAILS]\n${storyContextCache}\n\n[END USER'S STORY]\n\n${baseInstruction}`;
+  }
+  return baseInstruction;
+}
+
 // Lighthouse Officiant Co-Pilot System Instruction
 export const SYSTEM_INSTRUCTION_OFFICIANT = `You are a compassionate funeral officiant's assistant. Use these 5 user answers to write a 500-word heartfelt eulogy and a 20-minute service timeline. Avoid clichés. Use the user's specific memories to create an authentic 'Lighthouse' restoration plan.
 
@@ -113,12 +156,15 @@ export const streamChatResponse = async (
   onChunk: (text: string) => void,
   customSystemInstruction?: string
 ) => {
-  // Use gemini-2.5-flash for general chat (2025 SSOT standard)
-  const modelId = 'gemini-2.5-flash';
+  // Phase 2: Use gemini-3-flash for 3x faster response times (2025 standard)
+  const modelId = 'gemini-3-flash';
 
   // Use custom system instruction if provided, otherwise use default
-  const systemInstruction = customSystemInstruction ||
+  // Phase 2: Build with cached story context for persistent memory
+  const baseInstruction = customSystemInstruction ||
     "You are Lighthouse, a compassionate estate orchestrator. You help users navigate the logistics of death. Be calm, empathetic, and ultra-organized. Use 'restoration' instead of 'cleanup'. If the user seems overwhelmed, suggest delegating tasks. Use short, clear paragraphs.";
+
+  const systemInstruction = buildSystemInstruction(baseInstruction);
 
   try {
     const chat = ai.chats.create({
@@ -138,20 +184,38 @@ export const streamChatResponse = async (
     }
   } catch (error) {
     console.error("Chat Error:", error);
-    onChunk("I'm having trouble connecting right now. Please try again.");
+    // Phase 2: Fallback to gemini-2.5-flash if gemini-3-flash unavailable
+    console.log('[Phase 2] Falling back to gemini-2.5-flash...');
+    try {
+      const fallbackChat = ai.chats.create({
+        model: 'gemini-2.5-flash',
+        config: {
+          systemInstruction: systemInstruction,
+          tools: [{ googleSearch: {} }],
+        },
+      });
+      const fallbackResult = await fallbackChat.sendMessageStream({ message });
+      for await (const chunk of fallbackResult) {
+        if (chunk.text) {
+          onChunk(chunk.text);
+        }
+      }
+    } catch (fallbackError) {
+      console.error("Fallback also failed:", fallbackError);
+      onChunk("I'm having trouble connecting right now. Please try again.");
+    }
   }
 };
 
 // --- Vision Service (Smart Vault) ---
 
 export const analyzeDocument = async (base64Image: string, mimeType: string) => {
-  // List of models to try in order of preference
-  // All models are valid as of December 2025 (2025 SSOT standard)
+  // Phase 2: Updated model hierarchy for 2025
   const models = [
-    'gemini-2.5-flash',
-    'gemini-2.0-flash-exp',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro'
+    'gemini-3-flash',      // Primary: fastest with vision
+    'gemini-2.5-flash',     // Fallback 1: previous gen
+    'gemini-2.0-flash-exp', // Fallback 2: experimental
+    'gemini-1.5-flash'      // Fallback 3: stable
   ];
 
   const enhancedPrompt = `You are a document analysis expert for a bereavement support app. Analyze this image carefully.
@@ -266,8 +330,8 @@ Return ONLY this JSON structure:
 // --- Maps Service (Funeral Homes) ---
 
 export const findFuneralHomes = async (latitude: number, longitude: number) => {
-  // gemini-2.5-flash for Google Maps integration (2025 SSOT standard)
-  const modelId = 'gemini-2.5-flash';
+  // Phase 2: gemini-3-flash for faster Maps integration
+  const modelId = 'gemini-3-flash';
 
   try {
     const response = await ai.models.generateContent({
@@ -288,6 +352,102 @@ export const findFuneralHomes = async (latitude: number, longitude: number) => {
     return "I couldn't load the map data right now.";
   }
 };
+
+// ============================================================================
+// PHASE 2: DEEP RESEARCH AGENT (Interstate Transport)
+// ============================================================================
+
+/**
+ * Deep Research Agent for interstate transport logistics
+ * Uses Gemini Deep Research (Beta) to compile comprehensive interstate transport itineraries
+ *
+ * Returns: Complete itinerary with airlines, HUM requirements, and funeral home contacts
+ */
+export interface DeepResearchItinerary {
+  summary: string;
+  airlines: Array<{
+    name: string;
+    humContact: string;
+    requirements: string[];
+  }>;
+  funeralHomes: Array<{
+    name: string;
+    phone: string;
+    location: string;
+  }>;
+  restrictions: string[];
+  estimatedCost: string;
+  timeline: string;
+}
+
+export async function deepResearchInterstateTransport(
+  originLocation: string,
+  destinationLocation: string
+): Promise<DeepResearchItinerary | null> {
+  try {
+    console.log(`[Phase 2] Deep Research: ${originLocation} → ${destinationLocation}`);
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro', // Use Pro model for deep research
+      contents: {
+        parts: [{
+          text: `You are a funeral logistics specialist researching interstate human remains transport.
+
+ORIGIN: ${originLocation}
+DESTINATION: ${destinationLocation}
+
+Research and compile a comprehensive transport itinerary with:
+
+1. AIRLINE OPTIONS: Find 3-4 major airlines that serve this route with HUM (Human Remains) capacity
+   - Include HUM desk contact phone numbers
+   - List specific requirements for each
+
+2. FUNERAL HOMES: Identify 2-3 reputable funeral homes near origin WITH shipping experience
+   - Include phone numbers and addresses
+   - Note if they are "Known Shippers" (critical for air transport)
+
+3. REQUIREMENTS: List all specific requirements for this route:
+   - Embalming requirements
+   - Container specifications
+   - Lead time needed
+   - Weather considerations
+
+4. ESTIMATED COSTS: Typical cost range for this specific route
+
+5. TIMELINE: How long the process typically takes
+
+Return ONLY valid JSON:
+{
+  "summary": "2-3 sentence overview",
+  "airlines": [{"name": "Airline", "humContact": "phone", "requirements": ["req1", "req2"]}],
+  "funeralHomes": [{"name": "Name", "phone": "phone", "location": "address"}],
+  "restrictions": ["restriction1", "restriction2"],
+  "estimatedCost": "$X,XXX-$X,XXX",
+  "timeline": "X-X days"
+}`
+        }]
+      },
+      config: {
+        responseMimeType: 'application/json',
+        tools: [{ googleSearch: { dynamicRetrievalConfig: { mode: 'MODE_DYNAMIC' } } }],
+        temperature: 0.2,
+      }
+    });
+
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+      throw new Error('No response from Deep Research Agent');
+    }
+
+    const result = JSON.parse(cleanJsonOutput(text));
+    console.log('[Phase 2] Deep Research completed successfully');
+    return result;
+
+  } catch (e) {
+    console.error('[Phase 2] Deep Research failed:', e);
+    return null;
+  }
+}
 
 // --- Live API Service (Voice Mode) ---
 
@@ -415,7 +575,7 @@ export const generateSpeech = async (text: string): Promise<AudioBuffer | null> 
 export async function generateNotificationDraft(documentType: string, entities: any): Promise<{ text: string }> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash", // 2025 SSOT standard for general tasks
+      model: "gemini-3-flash", // Phase 2: gemini-3-flash for general tasks
       contents: [{
         parts: [{
           text: `Create a professional, empathetic notification letter for ${documentType} based on the extracted information.
@@ -458,7 +618,7 @@ export async function getLocalProbateRequirements(location: string): Promise<{
 }> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview", // 2025 SSOT standard for complex reasoning
+      model: "gemini-3-pro", // Phase 2: gemini-3-pro for complex reasoning
       contents: [{
         parts: [{
           text: `I need local probate requirements for ${location}. Please provide:
@@ -497,6 +657,8 @@ The summary field MUST be optimized for Text-to-Speech: short sentences, clear p
         },
         tools: [{ googleSearch: {} }],
         temperature: 0.1,
+        // Phase 2: Enable high thinking level for zero-hallucination accuracy
+        thinking_level: 'high',
       }
     });
 
@@ -534,7 +696,7 @@ export async function getTransportLaws(location: string): Promise<{
 }> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview", // 2025 SSOT standard for complex reasoning
+      model: "gemini-3-pro", // Phase 2: gemini-3-pro for complex reasoning
       contents: [{ parts: [{ text: `
         I need current information about transporting human remains from ${location}. Please provide:
         1. FAA regulations for air transport of human remains
@@ -572,6 +734,8 @@ export async function getTransportLaws(location: string): Promise<{
         },
         tools: [{ googleSearch: {} }],
         temperature: 0.1,
+        // Phase 2: Enable high thinking level for zero-hallucination accuracy
+        thinking_level: 'high',
       }
     });
 
@@ -625,7 +789,7 @@ function extractPersonalInfo(documentScans: any[]): { fullName?: string; birthDa
 export async function generateSupportShareMessage(userName: string, deceasedName: string, supportLink: string): Promise<string> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash", // 2025 SSOT standard for general tasks
+      model: "gemini-3-flash", // Phase 2: gemini-3-flash for general tasks
       contents: [{
         parts: [{
           text: `Create a compassionate, warm message that ${userName} can send to friends and family to share a support link for arrangements related to ${deceasedName}'s passing.
@@ -790,7 +954,7 @@ Important Instructions:
     ];
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash", // 2025 SSOT standard for general tasks
+      model: "gemini-3-flash", // Phase 2: gemini-3-flash for general tasks
       contents: conversation,
     });
 

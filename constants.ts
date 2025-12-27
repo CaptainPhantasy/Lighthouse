@@ -4,13 +4,26 @@ import { UserState, Task } from './types';
 export const ENCRYPTION_PASSWORD = process.env.ENCRYPTION_PASSWORD || 'lighthouse_default_key_2024';
 
 export const INITIAL_USER_STATE: UserState = {
+  // Core identity
   name: '',
+  deceasedName: '',
+
+  // Safety and immediate status
   isSafe: false,
   deceasedLocation: 'UNKNOWN',
   deathPronounced: false,
-  deceasedName: '',
   isVeteran: false,
+
+  // Phase 2: Sentient Onboarding fields
+  relationshipToDeceased: '',
+  userLocation: '',
+  wishesKnowledgeLevel: 'VAGUE',
+  initialStoryTranscript: '',
+
+  // Cognitive state
   brainFogLevel: 3,
+
+  // Service planning
   servicePreference: 'SECULAR',
 };
 

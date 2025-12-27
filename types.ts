@@ -1,5 +1,6 @@
 export enum AppView {
   INTAKE = 'INTAKE',
+  VOICE_INTRO = 'VOICE_INTRO', // Phase 2: Sentient onboarding
   TRANSITION = 'TRANSITION',
   DASHBOARD = 'DASHBOARD',
   VOLUNTEER = 'VOLUNTEER',
@@ -15,14 +16,30 @@ export enum IntakeStep {
   COMPLETE = 'COMPLETE'
 }
 
+// Phase 2: Wishes knowledge level for intelligent routing
+export type WishesKnowledgeLevel = 'NONE' | 'VAGUE' | 'CLEAR';
+
 export interface UserState {
+  // Core identity
   name: string;
+  deceasedName: string;
+
+  // Safety and immediate status
   isSafe: boolean;
   deceasedLocation: 'HOME' | 'HOSPITAL' | 'OUT_OF_STATE' | 'UNKNOWN';
   deathPronounced: boolean;
-  deceasedName: string;
   isVeteran: boolean;
+
+  // Phase 2: Sentient Onboarding fields
+  relationshipToDeceased: string; // e.g., 'Spouse', 'Child', 'Friend', 'Parent'
+  userLocation: string; // e.g., 'San Francisco, CA' - for local grounding
+  wishesKnowledgeLevel: WishesKnowledgeLevel; // For intelligent routing
+  initialStoryTranscript: string; // Full emotional narrative - cached for all AI sessions
+
+  // Cognitive state
   brainFogLevel: number; // 1-5
+
+  // Service planning
   servicePreference?: ServicePreference;
   serviceOutline?: string;
   editedServiceOutline?: string;

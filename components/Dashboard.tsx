@@ -415,10 +415,17 @@ const Dashboard: React.FC<DashboardProps> = ({
     setTimeout(() => setToast(null), 8000);
   };
 
+  // Phase 2: Brain Fog Adaptation
+  // Level 5: Show ONLY 'Safe Return' (Transport) path - hide Financial (VAULT) and Legal (RESOLUTION)
+  // Level 4: Minimalist mode - show essential tabs
+  // Level 1-3: Full experience
   const isMinimalistMode = userState.brainFogLevel >= 4;
+  const isSafeReturnMode = userState.brainFogLevel === 5;
 
-  const visibleTabs = isMinimalistMode
-    ? ['OVERVIEW', 'TASKS', 'ASSIST', 'SUPPORT'] as const
+  const visibleTabs = isSafeReturnMode
+    ? ['OVERVIEW', 'TRANSPORT', 'ASSIST', 'SUPPORT'] as const  // Only safe return path
+    : isMinimalistMode
+    ? ['OVERVIEW', 'TASKS', 'ASSIST', 'SUPPORT'] as const       // Minimalist - hide vault/resolution
     : ['OVERVIEW', 'TASKS', 'VAULT', 'ASSIST', 'TRANSPORT', 'RESOLUTION', 'SUPPORT'] as const;
 
   const allNavItems = [
