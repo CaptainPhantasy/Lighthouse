@@ -296,7 +296,9 @@ export const connectLiveSession = async (
   onClose: () => void
 ) => {
   // gemini-2.5-flash-preview-tts for Text-to-Speech (2025 SSOT standard)
-  const modelId = 'gemini-2.5-flash-preview-tts';
+  // NOTE: As of Dec 2025, preview models may not be available. Falls back to gemini-2.0-flash-exp
+  const ttsModels = ['gemini-2.5-flash-preview-tts', 'gemini-2.0-flash-exp'];
+  const modelId = ttsModels[0];
   
   const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
   const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
@@ -372,30 +374,42 @@ export const connectLiveSession = async (
 
 // --- TTS Service (Eulogy Reader) ---
 export const generateSpeech = async (text: string): Promise<AudioBuffer | null> => {
-  try {
-     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts", // 2025 SSOT standard for TTS
-      contents: [{ parts: [{ text }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
+  // Try multiple TTS models in order of preference
+  const ttsModels = ['gemini-2.5-flash-preview-tts', 'gemini-2.0-flash-exp'];
+
+  for (const modelId of ttsModels) {
+    try {
+      console.log(`Attempting TTS with model: ${modelId}`);
+      const response = await ai.models.generateContent({
+        model: modelId,
+        contents: [{ parts: [{ text }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: { voiceName: 'Fenrir' }, // Deep, steady voice
             },
+          },
         },
-      },
-    });
+      });
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Audio) return null;
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (!base64Audio) {
+        console.warn(`No audio data returned from ${modelId}`);
+        continue;
+      }
 
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 24000});
-    return await decodeAudioData(decodeAudio(base64Audio), ctx, 24000, 1);
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 24000});
+      return await decodeAudioData(decodeAudio(base64Audio), ctx, 24000, 1);
 
-  } catch (e) {
-    console.error("TTS Error", e);
-    return null;
+    } catch (e) {
+      console.warn(`TTS failed with model ${modelId}:`, e);
+      continue; // Try next model
+    }
   }
+
+  console.error("TTS failed with all models");
+  return null;
 }
 
 export async function generateNotificationDraft(documentType: string, entities: any): Promise<{ text: string }> {
