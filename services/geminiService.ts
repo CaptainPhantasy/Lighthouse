@@ -1,6 +1,14 @@
 import { GoogleGenAI, LiveServerMessage, Modality, Type, FunctionDeclaration } from "@google/genai";
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+
+// Debug: Log if API key is missing (do NOT log the actual key)
+if (!apiKey || apiKey.length === 0) {
+  console.error('CRITICAL: VITE_GEMINI_API_KEY is not set. AI features will not work.');
+} else {
+  console.log('Gemini API key loaded successfully.');
+}
+
 const ai = new GoogleGenAI({ apiKey });
 
 // Lighthouse Officiant Co-Pilot System Instruction
@@ -138,8 +146,8 @@ export const streamChatResponse = async (
 
 export const analyzeDocument = async (base64Image: string, mimeType: string) => {
   // List of models to try in order of preference
+  // All models are valid as of December 2024
   const models = [
-    'gemini-2.5-flash',
     'gemini-2.0-flash-exp',
     'gemini-1.5-flash',
     'gemini-1.5-pro'
