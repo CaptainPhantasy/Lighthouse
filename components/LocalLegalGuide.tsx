@@ -37,15 +37,9 @@ const LocalLegalGuide: React.FC<LocalLegalGuideProps> = ({ userState }) => {
         const info = await getLocalProbateRequirements(userState.deceasedLocation);
         setProbateInfo({
           location: userState.deceasedLocation,
-          requirements: info.requirements || 'Standard probate process applies',
-          timeframe: info.timeframe || 'Varies by state (3-12 months)',
-          documents: info.documents || [
-            'Death certificate',
-            'Original will',
-            'List of assets',
-            'Beneficiary information',
-            'Court filing fees'
-          ],
+          requirements: info.requirements,
+          timeframe: info.timeframe,
+          documents: info.documents,
           notes: info.notes,
           isLoading: false
         });

@@ -2,7 +2,7 @@ import React from 'react';
 import { Tabs } from './ui/tabs';
 import { BentoGrid, BentoCard } from './ui/bento-grid';
 import { FloatingDock } from './ui/floating-dock';
-import { ColourfulText } from './ui/colourful-text';
+import ColourfulText from './ui/colourful-text';
 import { Sparkles, FileText, HeartHandshake, Users, Bell, Compass, TrendingUp, CheckCircle2, Clock } from 'lucide-react';
 import SmartVault from './SmartVault';
 import CompassionateAssistant from './CompassionateAssistant';
@@ -107,7 +107,7 @@ const AceternityDashboard: React.FC<AceternityDashboardProps> = ({
     {
       title: 'Guide',
       value: 'guide',
-      content: <CompassionateAssistant userState={userState} />,
+      content: <CompassionateAssistant userState={userState} documentScans={documentScans} />,
     },
   ];
 

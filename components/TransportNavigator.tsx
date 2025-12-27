@@ -86,22 +86,12 @@ const TransportNavigator: React.FC<TransportNavigatorProps> = ({ userState }) =>
   }, [userState.deceasedLocation]);
 
   const fetchTransportLaws = async () => {
-    const locationQuery = `Current FAA and airline regulations for transporting human remains from ${userState.deceasedLocation} to destination. Please include:
-      1. Current FAA regulations for air transport
-      2. Airline requirements for 'HUM' (Human Remains) shipments
-      3. Role and responsibilities of the receiving funeral home
-      4. Any shipping restrictions or requirements
-      5. Information about Known Shipper status
-    `;
-
     try {
       setLoading(true);
       setError(null);
-      const response = await getTransportLaws(locationQuery);
-      if (response && response.text) {
-        // Parse the AI response into structured format
-        const parsedLaws = parseTransportLaws(response.text);
-        setLaws(parsedLaws);
+      const response = await getTransportLaws(userState.deceasedLocation);
+      if (response) {
+        setLaws(response);
       }
     } catch (err) {
       console.error('Error fetching transport laws:', err);
@@ -109,40 +99,6 @@ const TransportNavigator: React.FC<TransportNavigatorProps> = ({ userState }) =>
     } finally {
       setLoading(false);
     }
-  };
-
-  const parseTransportLaws = (text: string): TransportLaws => {
-    // This is a simplified parser - in production, you'd want more robust parsing
-    return {
-      faaRegulations: extractSection(text, 'FAA') || 'Human remains must be transported in accordance with FAA Part 175 regulations. All containers must be leak-proof and constructed of materials adequate to withstand ordinary handling.',
-      airlineRequirements: extractSection(text, 'airline') || 'Airlines require Known Shipper status for human remains transport. All shipments must be booked as "HUM" (Human Remains) and require embalming certificates and container affidavits.',
-      funeralHomeRole: extractSection(text, 'funeral home') || 'The receiving funeral home coordinates with the shipping funeral home, handles all documentation, ensures compliance with local regulations, and provides final transportation.',
-      shippingRestrictions: extractSection(text, 'restrictions')?.split('\n').filter(Boolean) || [
-        'Embalming typically required for air transport',
-        'Container must be hermetically sealed',
-        'Advance notice required to airlines',
-        'No radioactive materials or chemicals allowed'
-      ]
-    };
-  };
-
-  const extractSection = (text: string, keyword: string): string | null => {
-    const lines = text.split('\n');
-    const sectionLines = [];
-    let foundSection = false;
-
-    for (const line of lines) {
-      if (line.toLowerCase().includes(keyword.toLowerCase())) {
-        foundSection = true;
-        sectionLines.push(line);
-      } else if (foundSection && line.trim()) {
-        sectionLines.push(line);
-      } else if (foundSection && !line.trim()) {
-        break;
-      }
-    }
-
-    return sectionLines.length > 0 ? sectionLines.join('\n') : null;
   };
 
   const updateStepStatus = (stepId: string, status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED') => {

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Camera, FileText, Loader2, Upload, Filter, Tag, CheckCircle, FileDown, Copy, Sparkles, ArrowRight } from 'lucide-react';
 import { analyzeDocument, generateNotificationDraft } from '../services/geminiService';
 import { DocumentScan, Task } from '../types';
-import { encryptObject, decryptObject } from '../utils/encryption';
+import { encryptObject, decryptObject, EncryptionResult } from '../utils/encryption';
 import { ENCRYPTION_PASSWORD } from '../constants';
 
 interface SmartVaultProps {
@@ -222,7 +222,7 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
       for (const doc of documents) {
         if (doc.extractedData && typeof doc.extractedData === 'object' && 'encrypted' in doc.extractedData) {
           try {
-            const decryptedData = await decryptObject(doc.extractedData, ENCRYPTION_PASSWORD);
+            const decryptedData = await decryptObject(doc.extractedData as EncryptionResult, ENCRYPTION_PASSWORD);
             decrypted[doc.id] = decryptedData;
           } catch (error) {
             console.error(`Failed to decrypt document ${doc.id}:`, error);
@@ -319,7 +319,6 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
             ref={fileInputRef}
             className="hidden"
             accept="image/*,application/pdf"
-            capture="environment"
             onChange={handleFileUpload}
           />
         </div>

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { UserState } from '../types';
-import { CheckCircle, Heart, MapPin, AlertTriangle, Sparkles, ArrowRight, Feather } from 'lucide-react';
+import { CheckCircle, Heart, MapPin, AlertTriangle, Sparkles, ArrowRight, Feather, Volume1, VolumeX, RotateCcw } from 'lucide-react';
 import { AuroraBackground } from './ui/aurora-background';
-import { ColourfulText } from './ui/colourful-text';
+import ColourfulText from './ui/colourful-text';
+import { generateSpeech } from '../services/geminiService';
 
 interface TransitionViewProps {
   userState: UserState;
@@ -13,15 +14,122 @@ interface TransitionViewProps {
 const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }) => {
   const [showContinue, setShowContinue] = useState(false);
   const [showPriorityCard, setShowPriorityCard] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const audioBufferRef = useRef<AudioBuffer | null>(null);
+  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
+  // Check for user interaction
   useEffect(() => {
-    const timer1 = setTimeout(() => setShowPriorityCard(true), 800);
-    const timer2 = setTimeout(() => setShowContinue(true), 2500);
+    const handleUserInteraction = () => {
+      setHasUserInteracted(true);
+    };
+
+    window.addEventListener('click', handleUserInteraction);
+    window.addEventListener('keydown', handleUserInteraction);
+    window.addEventListener('touchstart', handleUserInteraction);
+
     return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
+      window.removeEventListener('click', handleUserInteraction);
+      window.removeEventListener('keydown', handleUserInteraction);
+      window.removeEventListener('touchstart', handleUserInteraction);
     };
   }, []);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioSourceRef.current) {
+        try {
+          audioSourceRef.current.stop();
+          audioSourceRef.current.disconnect();
+        } catch (e) {
+          // Audio may have already stopped
+        }
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, []);
+
+  // Generate and play speech on mount
+  useEffect(() => {
+    const generateAndPlaySpeech = async () => {
+      const welcomeMessage = `Take a breath, ${userState.name || 'friend'}. We've heard you. You don't have to carry this alone.`;
+
+      try {
+        const buffer = await generateSpeech(welcomeMessage);
+        if (buffer) {
+          audioBufferRef.current = buffer;
+
+          // Only auto-play if user has interacted and not muted
+          if (hasUserInteracted && !isMuted) {
+            playAudio(buffer);
+          }
+        }
+      } catch (error) {
+        console.error('Error generating speech:', error);
+      }
+    };
+
+    generateAndPlaySpeech();
+  }, [userState.name, hasUserInteracted]);
+
+  const playAudio = (buffer: AudioBuffer) => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+
+    // Stop any currently playing audio
+    if (audioSourceRef.current) {
+      audioSourceRef.current.stop();
+      audioSourceRef.current.disconnect();
+    }
+
+    const source = audioContextRef.current.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContextRef.current.destination);
+
+    source.onended = () => {
+      setAudioPlaying(false);
+      audioSourceRef.current = null;
+    };
+
+    source.start(0);
+    audioSourceRef.current = source;
+    setAudioPlaying(true);
+  };
+
+  const handleReplay = () => {
+    if (audioBufferRef.current) {
+      playAudio(audioBufferRef.current);
+    }
+  };
+
+  const toggleMute = () => {
+    setIsMuted(!isMuted);
+    if (audioSourceRef.current) {
+      try {
+        if (isMuted) {
+          // Unmute - replay if we have a buffer
+          if (audioBufferRef.current) {
+            playAudio(audioBufferRef.current);
+          }
+        } else {
+          // Mute - stop current audio
+          audioSourceRef.current.stop();
+          audioSourceRef.current.disconnect();
+          audioSourceRef.current = null;
+          setAudioPlaying(false);
+        }
+      } catch (error) {
+        console.error('Error toggling mute:', error);
+      }
+    }
+  };
 
   const getPriorityCrisis = () => {
     if (userState.deceasedLocation === 'OUT_OF_STATE' && !userState.deathPronounced) {
@@ -118,6 +226,58 @@ const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }
                 <span className="text-sm text-slate-400 uppercase tracking-widest">A Moment of Relief</span>
                 <Feather className="w-5 h-5 text-slate-400" />
               </div>
+
+              {/* Audio Controls */}
+              <div className="flex items-center justify-center gap-2">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={toggleMute}
+                  className="p-2 rounded-full bg-stone-100 hover:bg-stone-200 transition-colors border border-stone-200"
+                  aria-label={isMuted ? 'Unmute' : 'Mute'}
+                >
+                  {isMuted ? (
+                    <VolumeX className="w-4 h-4 text-stone-600" />
+                  ) : (
+                    <Volume1 className="w-4 h-4 text-stone-600" />
+                  )}
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleReplay}
+                  disabled={!audioBufferRef.current}
+                  className="p-2 rounded-full bg-stone-100 hover:bg-stone-200 transition-colors border border-stone-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label="Replay message"
+                >
+                  <RotateCcw className="w-4 h-4 text-stone-600" />
+                </motion.button>
+                {audioPlaying && (
+                  <motion.span
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-xs text-stone-500 flex items-center gap-1"
+                  >
+                    <span className="relative flex h-2 w-2">
+                      <motion.span
+                        animate={{
+                          scale: [1, 1.5, 1],
+                          opacity: [0.5, 1, 0.5],
+                        }}
+                        transition={{
+                          duration: 1.5,
+                          repeat: Infinity,
+                          ease: 'easeInOut',
+                        }}
+                        className="absolute inline-flex h-full w-full rounded-full bg-stone-400"
+                      />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-stone-500" />
+                    </span>
+                    Playing
+                  </motion.span>
+                )}
+              </div>
+
               <h1 className="text-3xl md:text-4xl font-light text-slate-800 leading-tight">
                 Take a breath, <span className="font-semibold text-black">{userState.name || 'friend'}</span>.
               </h1>

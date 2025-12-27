@@ -16,6 +16,7 @@ interface IntakeFlowProps {
 // Progress steps for the multi-step loader
 const STEPS = [
   { label: 'Safety', icon: ShieldCheck },
+  { label: 'Welcome', icon: User },
   { label: 'Location', icon: MapPin },
   { label: 'Legal', icon: Stethoscope },
   { label: 'Identity', icon: User },
@@ -139,7 +140,12 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
     if (isListeningForVoice) {
       stopVoiceListening();
     } else {
-      setFormData({ ...formData, deceasedName: voiceTranscript });
+      // Set the appropriate field based on current step
+      if (step === IntakeStep.USER_INTRO) {
+        setFormData({ ...formData, name: voiceTranscript });
+      } else {
+        setFormData({ ...formData, deceasedName: voiceTranscript });
+      }
       startVoiceListening({ continuous: true, interimResults: true });
     }
   };
@@ -244,7 +250,7 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
                   {TEXTS.safety_question}
                 </p>
                 <CompassionateButton
-                  onClick={() => handleNext(IntakeStep.IMMEDIATE_STATUS, { isSafe: true })}
+                  onClick={() => handleNext(IntakeStep.USER_INTRO, { isSafe: true })}
                   variant="primary"
                   fullWidth
                   className="py-4 text-lg"
@@ -254,6 +260,88 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
                 <p className="text-center text-slate-400 text-sm mt-4">
                   If you are not safe, please dial 911
                 </p>
+              </GracefulCard>
+            )}
+
+            {step === IntakeStep.USER_INTRO && (
+              <GracefulCard key="user_intro" delay={0.1}>
+                <motion.div
+                  animate={{ scale: [1, 1.05, 1] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                  className="w-16 h-16 bg-stone-100 rounded-2xl flex items-center justify-center mx-auto mb-6"
+                >
+                  <User className="w-8 h-8 text-black" />
+                </motion.div>
+                <h2 className="text-xl font-light text-slate-800 text-center mb-2">
+                  I'm glad you're safe. I am Lighthouse.
+                </h2>
+                <p className="text-sm text-slate-500 text-center mb-8">
+                  What should I call you?
+                </p>
+
+                <div className="relative mb-6">
+                  <PlaceholdersAndVanishInput
+                    placeholders={["Enter your name...", "What would you like me to call you?"]}
+                    value={formData.name || voiceTranscript}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full"
+                  />
+                  {browserSupportsSpeechRecognition && (
+                    <motion.button
+                      whileTap={{ scale: 0.9 }}
+                      type="button"
+                      onClick={toggleVoiceInput}
+                      className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-2.5 rounded-xl transition-all duration-300 ${
+                        isListeningForVoice
+                          ? 'bg-red-100 text-red-500 hover:bg-red-200 shadow-lg shadow-red-200'
+                          : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                      }`}
+                      title={isListeningForVoice ? "Stop voice input" : "Use voice input"}
+                    >
+                      {isListeningForVoice ? (
+                        <MicOff className="w-4 h-4" />
+                      ) : (
+                        <Mic className="w-4 h-4" />
+                      )}
+                    </motion.button>
+                  )}
+                </div>
+
+                {isListeningForVoice && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-stone-100 border border-stone-200 rounded-2xl p-4 text-center mb-4"
+                  >
+                    <div className="flex items-center justify-center gap-2 text-black">
+                      <motion.div
+                        className="w-2 h-2 bg-black rounded-full"
+                        animate={{ scale: [1, 1.3, 1] }}
+                        transition={{ duration: 1, repeat: Infinity }}
+                      />
+                      <span className="text-sm">Listening... Speak your name</span>
+                    </div>
+                  </motion.div>
+                )}
+
+                {voiceTranscript && formData.name === voiceTranscript && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-green-50 border border-green-100 rounded-2xl p-4 text-center mb-4"
+                  >
+                    <p className="text-green-700 text-sm">"{voiceTranscript}"</p>
+                  </motion.div>
+                )}
+
+                <CompassionateButton
+                  onClick={() => handleNext(IntakeStep.IMMEDIATE_STATUS, { name: formData.name || voiceTranscript })}
+                  variant="primary"
+                  fullWidth
+                  disabled={!formData.name && !voiceTranscript}
+                >
+                  Continue
+                </CompassionateButton>
               </GracefulCard>
             )}
 

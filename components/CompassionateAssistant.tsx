@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, Send, Volume2, StopCircle, Map as MapIcon, Loader2, Sparkles, Volume1, FileText, Play, DraftingCompass, Heart, BookOpen, Waves, SkipForward } from 'lucide-react';
-import { streamChatResponse, connectLiveSession, findFuneralHomes, generateSpeech, generateServiceOutline } from '../services/geminiService';
+import { Mic, Send, Volume2, StopCircle, Map as MapIcon, Loader2, Sparkles, Volume1, FileText, Play, DraftingCompass, Heart, BookOpen, Waves, SkipForward, CheckCircle } from 'lucide-react';
+import { streamChatResponse, connectLiveSession, generateSpeech, generateServiceOutline as generateServiceOutlineAPI } from '../services/geminiService';
 import { ChatMessage, UserState, DocumentScan, ServicePreference } from '../types';
 import { SERVICE_PREFERENCES, OFFICIANT_QUESTIONS, SERVICE_TEMPLATES } from '../constants';
+import useSpeechToText from '../hooks/useSpeechToText';
 
 interface AssistantProps {
   userState: UserState;
@@ -43,48 +44,26 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
     setTimeout(() => setToast({message: '', visible: false}), 3000);
   };
   const [isThinking, setIsThinking] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [recognition, setRecognition] = useState<any>(null);
   const [isLiveActive, setIsLiveActive] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [autoPlay, setAutoPlay] = useState(false);
   const [serviceOutline, setServiceOutline] = useState<string | null>(userState.serviceOutline || null);
 
-  // Initialize speech recognition
+  const {
+    isListening,
+    transcript: voiceTranscript,
+    startListening,
+    stopListening,
+    clearTranscript,
+    browserSupportsSpeechRecognition
+  } = useSpeechToText();
+
+  // Sync hook transcript with input
   useEffect(() => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      const recognitionInstance = new SpeechRecognition();
-      recognitionInstance.continuous = false;
-      recognitionInstance.interimResults = true;
-      recognitionInstance.lang = 'en-US';
-
-      recognitionInstance.onresult = (event: any) => {
-        const transcript = Array.from(event.results)
-          .map((result: any) => result[0])
-          .map(result => result.transcript)
-          .join('');
-        setInput(transcript);
-      };
-
-      recognitionInstance.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        setIsListening(false);
-      };
-
-      recognitionInstance.onend = () => {
-        setIsListening(false);
-      };
-
-      setRecognition(recognitionInstance);
+    if (voiceTranscript) {
+      setInput(voiceTranscript);
     }
-
-    return () => {
-      if (recognition) {
-        recognition.stop();
-      }
-    };
-  }, []);
+  }, [voiceTranscript]);
   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false);
   const [questionsAsked, setQuestionsAsked] = useState<string[]>([]);
   const [isEditingOutline, setIsEditingOutline] = useState(false);
@@ -99,6 +78,7 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const nextStartTimeRef = useRef<number>(0);
+  const hasShownTransportMessage = useRef<boolean>(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -122,6 +102,24 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
     }
   }, [serviceOutline]);
 
+  // Show proactive transport message when deceased is out of state
+  useEffect(() => {
+    if (
+      userState.deceasedLocation === 'OUT_OF_STATE' &&
+      !hasShownTransportMessage.current
+    ) {
+      const transportMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'model',
+        content: "I see your loved one is out of state. I've pre-loaded the transport regulations for you. Shall I walk you through them?",
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, transportMessage]);
+      hasShownTransportMessage.current = true;
+    }
+  }, [userState.deceasedLocation]);
+
   // Handle service preference change
   const handlePreferenceChange = (preference: ServicePreference) => {
     setServicePreference(preference);
@@ -139,14 +137,13 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
     setIsPlayingAudio(false);
   };
 
-  const playAudio = async (audioData: ArrayBuffer) => {
+  const playAudio = async (audioBuffer: AudioBuffer) => {
     stopAudio();
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       const audioContext = new AudioContext();
       audioContextRef.current = audioContext;
 
-      const audioBuffer = await audioContext.decodeAudioData(audioData);
       const source = audioContext.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(audioContext.destination);
@@ -189,27 +186,28 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
     setIsThinking(true);
 
     try {
-      const response = await streamChatResponse(
+      // Collect the streamed response
+      let fullResponse = '';
+      await streamChatResponse(
         messages.map(m => ({ role: m.role, parts: [{ text: m.content }] })),
         userMessage.content,
-        (text) => {
-          // Handle streaming chunks if needed
-          console.log('Chunk:', text);
+        (chunk) => {
+          fullResponse += chunk;
         }
       );
 
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        content: response,
+        content: fullResponse,
         timestamp: new Date()
       };
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      if (autoPlay && response) {
+      if (autoPlay && fullResponse) {
         try {
-          const audioBuffer = await generateSpeech(response);
+          const audioBuffer = await generateSpeech(fullResponse);
           if (audioBuffer) {
             await playAudio(audioBuffer);
           }
@@ -241,8 +239,26 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
       stopAudio();
     } else {
       try {
-        const cleanup = await connectLiveSession();
-        liveSessionCleanup.current = cleanup;
+        const session = await connectLiveSession(
+          // onAudioData callback
+          (audioBuffer: AudioBuffer) => {
+            // Play incoming audio from the live session
+            const source = audioContextRef.current?.createBufferSource();
+            if (source) {
+              source.buffer = audioBuffer;
+              source.connect(audioContextRef.current.destination);
+              source.start();
+              setIsPlayingAudio(true);
+              source.onended = () => setIsPlayingAudio(false);
+            }
+          },
+          // onClose callback
+          () => {
+            setIsLiveActive(false);
+            liveSessionCleanup.current = null;
+          }
+        );
+        liveSessionCleanup.current = session.disconnect;
         setIsLiveActive(true);
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
@@ -273,21 +289,13 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
     setMessages(prev => [...prev, userMessage]);
     setInput('');
 
-    try {
-      if (liveSessionCleanup.current) {
-        await liveSessionCleanup.current(input);
-      }
-    } catch (error) {
-      console.error('Error in live session:', error);
-    }
+    // In live mode, the audio is continuously captured and sent via the live session
+    // Text input is just displayed in the chat history
   };
 
   const toggleVoiceInput = async () => {
     if (isListening) {
-      setIsListening(false);
-      if (recognition) {
-        recognition.stop();
-      }
+      stopListening();
       // Cleanup transcribed input and clean it using AI
       if (input.trim()) {
         try {
@@ -314,24 +322,25 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
         }
       }
     } else {
-      setIsListening(true);
-      if (recognition) {
-        recognition.start();
-      }
+      clearTranscript();
+      startListening();
     }
   };
 
   // AI function to clean up transcribed speech while preserving emotional content
   const cleanUpTranscription = async (text: string): Promise<string> => {
     try {
-      const response = await streamChatResponse(
+      let cleanedText = '';
+      await streamChatResponse(
         [],
         `Please clean up this transcribed speech by removing filler words (um, uh, like, you know, so, etc.) while preserving the emotional content and meaning. Return only the cleaned text without any explanations or additions. Original text: "${text}"`,
-        (chunk) => {}
+        (chunk) => {
+          cleanedText += chunk;
+        }
       );
 
       // Extract the cleaned response from the streaming
-      return response.trim();
+      return cleanedText.trim();
     } catch (error) {
       console.error('Error cleaning up transcription:', error);
       return text; // Return original text if AI cleanup fails
@@ -422,7 +431,7 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
       }
 
       // Generate real service outline using Gemini API with service preference and document scans
-      const result = await generateServiceOutline(
+      const result = await generateServiceOutlineAPI(
         questionsAsked,
         responses,
         userState.deceasedName,
@@ -518,21 +527,16 @@ ${template.closingSection}`;
   const startMemoryRecording = () => {
     setIsRecordingMemory(true);
     setCurrentTranscript('');
-    if (recognition) {
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.start();
-    }
+    clearTranscript();
+    startListening();
   };
 
   const stopMemoryRecording = () => {
     setIsRecordingMemory(false);
-    if (recognition) {
-      recognition.stop();
-    }
+    stopListening();
     // Save the recorded memory
-    if (currentTranscript.trim()) {
-      const newMemory = currentTranscript.trim();
+    if (voiceTranscript.trim()) {
+      const newMemory = voiceTranscript.trim();
       setMemories(prev => [...prev, newMemory]);
 
       // Add to chat as a user message
@@ -556,6 +560,7 @@ ${template.closingSection}`;
       }, 500);
     }
     setCurrentTranscript('');
+    clearTranscript();
   };
 
   const generateOutlineFromMemories = async () => {
@@ -571,9 +576,9 @@ ${template.closingSection}`;
       const memoryText = memories.join('\n\n');
 
       // Generate service outline from memories
-      const result = await generateServiceOutline(
+      const result = await generateServiceOutlineAPI(
         [],
-        memories.map(m => ({ role: 'user', parts: [{ text: m }] })),
+        memories,
         userState.deceasedName,
         servicePreference,
         documentScans

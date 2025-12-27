@@ -7,6 +7,7 @@ export enum AppView {
 
 export enum IntakeStep {
   SAFETY_CHECK = 'SAFETY_CHECK',
+  USER_INTRO = 'USER_INTRO',
   IMMEDIATE_STATUS = 'IMMEDIATE_STATUS',
   LEGAL_TRIAGE = 'LEGAL_TRIAGE',
   IDENTITY = 'IDENTITY',

@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MOCK_TASKS, TEXTS } from '../constants';
 import { Task, UserState } from '../types';
-import { Share2, CheckCircle, Circle, Clock, Filter, AlertTriangle, Eye, EyeOff, MapPin, Copy, Link as LinkIcon, Users, Lock, Heart, Loader2 } from 'lucide-react';
+import { Share2, CheckCircle, Circle, Clock, Filter, AlertTriangle, Eye, EyeOff, MapPin, Copy, Link as LinkIcon, Users, Lock, Heart, Loader2, MessageSquare } from 'lucide-react';
 import LocalLegalGuide from './LocalLegalGuide';
 import { createSupportRequest } from '../services/supportRequestService';
+import { generateSupportShareMessage } from '../services/geminiService';
 
 interface DelegationHubProps {
   userState: UserState;
@@ -36,6 +37,10 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [shareMessage, setShareMessage] = useState<string>('');
+  const [isGeneratingMessage, setIsGeneratingMessage] = useState(false);
+  const [editedMessage, setEditedMessage] = useState<string>('');
+  const [copiedMessage, setCopiedMessage] = useState(false);
 
   // Check if all urgent and high priority tasks are completed
   const allUrgentAndHighCompleted = tasks.every(task => {
@@ -152,6 +157,25 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
       // Use the real magic link from the database
       setGeneratedLink(result.magicLink);
       setShowGatekeeperModal(true);
+
+      // Generate compassionate share message
+      setIsGeneratingMessage(true);
+      try {
+        const deceasedName = userState.deceasedName || 'your loved one';
+        const userName = userState.name || 'I';
+        const message = await generateSupportShareMessage(userName, deceasedName, result.magicLink);
+        setShareMessage(message);
+        setEditedMessage(message);
+      } catch (err) {
+        console.error('Failed to generate share message:', err);
+        // Set a default message if generation fails
+        const deceasedName = userState.deceasedName || 'your loved one';
+        const fallbackMessage = `Hi everyone, as we navigate this difficult time after ${deceasedName}'s passing, I wanted to share a way you can help. I've created a support link where you can see what needs to be done and pick up tasks that would mean a lot to me. Here's the link: ${result.magicLink} Thank you for being here for me.`;
+        setShareMessage(fallbackMessage);
+        setEditedMessage(fallbackMessage);
+      } finally {
+        setIsGeneratingMessage(false);
+      }
     } catch (err) {
       console.error('Failed to create support link:', err);
       showToast('Could not generate link. Please try again.');
@@ -165,6 +189,16 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
       navigator.clipboard.writeText(generatedLink);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
+
+  const handleCopyMessageAndLink = () => {
+    if (editedMessage && generatedLink) {
+      const fullContent = `${editedMessage}\n\n${generatedLink}`;
+      navigator.clipboard.writeText(fullContent);
+      setCopiedMessage(true);
+      setTimeout(() => setCopiedMessage(false), 2000);
+      showToast('Message and link copied to clipboard!');
     }
   };
 
@@ -381,7 +415,7 @@ return (
                animate={{ opacity: 1, scale: 1, y: 0 }}
                exit={{ opacity: 0, scale: 0.9, y: 20 }}
                onClick={(e) => e.stopPropagation()}
-               className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl"
+               className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
              >
                <div className="text-center mb-6">
                  <div className="bg-black w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -402,15 +436,44 @@ return (
                  </div>
                </div>
 
+               {/* Share Message Section */}
+               <div className="mb-4">
+                 <div className="flex items-center gap-2 mb-2">
+                   <MessageSquare className="w-4 h-4 text-stone-600" />
+                   <h4 className="font-bold text-sm">Share Message</h4>
+                 </div>
+                 <p className="text-xs text-stone-600 mb-2">
+                   Edit this message before sending to friends and family
+                 </p>
+
+                 {isGeneratingMessage ? (
+                   <div className="bg-stone-100 border border-stone-300 rounded-xl p-4 flex items-center justify-center min-h-[120px]">
+                     <div className="flex items-center gap-2 text-stone-600">
+                       <Loader2 className="w-4 h-4 animate-spin" />
+                       <span className="text-sm">Generating message...</span>
+                     </div>
+                   </div>
+                 ) : (
+                   <textarea
+                     value={editedMessage}
+                     onChange={(e) => setEditedMessage(e.target.value)}
+                     className="w-full bg-stone-100 border-2 border-stone-300 rounded-xl p-4 text-sm leading-relaxed resize-none focus:border-black focus:outline-none transition-colors"
+                     rows={5}
+                     placeholder="Your message will appear here..."
+                   />
+                 )}
+               </div>
+
                <div className="flex gap-3">
                  <motion.button
                    whileHover={{ scale: 1.02 }}
                    whileTap={{ scale: 0.98 }}
-                   onClick={handleCopySupportLink}
-                   className="flex-1 bg-black hover:bg-stone-800 text-white py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
+                   onClick={handleCopyMessageAndLink}
+                   disabled={isGeneratingMessage}
+                   className="flex-1 bg-black hover:bg-stone-800 text-white py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                  >
                    <Copy className="w-4 h-4" />
-                   {copiedLink ? 'Copied!' : 'Copy Link'}
+                   {copiedMessage ? 'Copied!' : 'Copy Message + Link'}
                  </motion.button>
                  <motion.button
                    whileHover={{ scale: 1.02 }}

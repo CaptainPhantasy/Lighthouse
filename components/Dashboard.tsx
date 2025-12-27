@@ -94,7 +94,7 @@ const BentoGridOverview: React.FC<{
   tasks: Task[];
   documentScans: DocumentScan[];
   userState: UserState;
-  onTabChange: (tab: 'TASKS' | 'VAULT' | 'ASSIST' | 'TRANSPORT' | 'RESOLUTION' | 'SUPPORT') => void;
+  onTabChange: (tab: 'TASKS' | 'VAULT' | 'ASSIST' | 'TRANSPORT' | 'RESOLUTION' | 'SUPPORT' | 'OVERVIEW') => void;
   isDark?: boolean;
 }> = ({ tasks, documentScans, userState, onTabChange, isDark = false }) => {
   const completedTasks = tasks.filter(t => t.status === 'COMPLETED').length;
@@ -421,7 +421,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     ? ['OVERVIEW', 'TASKS', 'ASSIST', 'SUPPORT'] as const
     : ['OVERVIEW', 'TASKS', 'VAULT', 'ASSIST', 'TRANSPORT', 'RESOLUTION', 'SUPPORT'] as const;
 
-  const navItems = [
+  const allNavItems = [
     { id: 'OVERVIEW' as const, icon: Sparkles, label: 'Overview' },
     { id: 'TASKS' as const, icon: LayoutDashboard, label: 'Plan' },
     { id: 'VAULT' as const, icon: FileText, label: 'Vault' },
@@ -429,7 +429,9 @@ const Dashboard: React.FC<DashboardProps> = ({
     { id: 'TRANSPORT' as const, icon: Plane, label: 'Transport' },
     { id: 'RESOLUTION' as const, icon: Award, label: 'Complete' },
     { id: 'SUPPORT' as const, icon: Users, label: 'Support' },
-  ].filter(item => visibleTabs.includes(item.id));
+  ];
+
+  const navItems = allNavItems.filter(item => visibleTabs.includes(item.id as any));
 
   const isTransportPriority = userState.deceasedLocation === 'OUT_OF_STATE' && !userState.deathPronounced;
 

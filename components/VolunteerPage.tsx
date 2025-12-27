@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getSupportRequest, updateSupportRequestStatus, SupportRequest } from '../services/supportRequestService';
+import { getSupportRequest, updateSupportRequestStatus } from '../services/supportRequestService';
 import { motion } from 'motion/react';
 import { Heart, HeartHandshake, X, Check, Sparkles, Loader2 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
@@ -8,10 +8,21 @@ interface VolunteerPageProps {
   requestId: string;
 }
 
+// Local type for support request data
+interface SupportRequestData {
+  id: string;
+  user_id: string;
+  supporter_email: string;
+  request_type: string;
+  status: 'pending' | 'fulfilled' | 'declined';
+  created_at: string;
+  fulfilled_at?: string;
+}
+
 const VolunteerPage: React.FC<VolunteerPageProps> = ({ requestId }) => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const [request, setRequest] = useState<SupportRequest | null>(null);
+  const [request, setRequest] = useState<SupportRequestData | null>(null);
   const [loading, setLoading] = useState(true);
   const [accepted, setAccepted] = useState(false);
   const [declined, setDeclined] = useState(false);

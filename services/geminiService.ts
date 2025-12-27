@@ -24,6 +24,28 @@ Formatting: Use clear Markdown headers. Surround the Eulogy section with specifi
 
 Create an authentic, heartfelt restoration plan that honors their memory and provides comfort to those gathered.`;
 
+// --- JSON Parsing Utility ---
+/**
+ * Strips markdown code blocks from AI responses before JSON parsing
+ * Handles cases where AI returns ```json ... ``` or ``` ... ```
+ */
+function cleanJsonOutput(text: string): string {
+  if (!text) return '{}';
+
+  // Remove markdown code blocks
+  let cleaned = text.trim();
+
+  // Remove ```json ... ``` blocks
+  cleaned = cleaned.replace(/^```json\s*/i, '');
+  cleaned = cleaned.replace(/^```\s*/i, '');
+  cleaned = cleaned.replace(/```\s*$/i, '');
+
+  // Remove any remaining markdown formatting
+  cleaned = cleaned.trim();
+
+  return cleaned;
+}
+
 // --- Audio Encoding/Decoding Utils for Live API ---
 function encodeAudio(bytes: Uint8Array) {
   let binary = '';
@@ -161,7 +183,7 @@ export const analyzeDocument = async (base64Image: string, mimeType: string) => 
       }
     });
     
-    return JSON.parse(response.text || '{}');
+    return JSON.parse(cleanJsonOutput(response.text || '{}'));
   } catch (error) {
     console.error("Vision Error:", error);
     throw error;
@@ -355,25 +377,49 @@ Sincerely,
   }
 }
 
-export async function getLocalProbateRequirements(location: string): Promise<{ text: string }> {
+export async function getLocalProbateRequirements(location: string): Promise<{
+  requirements: string;
+  timeframe: string;
+  documents: string[];
+  notes?: string;
+}> {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: [{
         parts: [{
-          text: `I need local probate requirements for ${location}. Please search for and provide:
+          text: `I need local probate requirements for ${location}. Please provide:
 1. County-specific filing fees for probate
 2. Address and contact information for the nearest probate court
 3. Small Estate Affidavit forms and eligibility requirements
 4. Local probate process timeline and requirements
 5. Contact information for probate clerks
 
-Return this information in a clear, structured format with practical guidance.`
+Return ONLY valid JSON with this exact structure:
+{
+  "requirements": "Summary of probate requirements",
+  "timeframe": "Expected timeline (e.g., '3-6 months')",
+  "documents": ["doc1", "doc2", "doc3"],
+  "notes": "Additional important notes"
+}`
         }]
       }],
       config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            requirements: { type: Type.STRING },
+            timeframe: { type: Type.STRING },
+            documents: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            notes: { type: Type.STRING }
+          }
+        },
         tools: [{ googleSearch: {} }],
-        temperature: 0.1, // Low temperature for factual accuracy
+        temperature: 0.1,
       }
     });
 
@@ -382,48 +428,32 @@ Return this information in a clear, structured format with practical guidance.`
       throw new Error('No response from AI');
     }
 
-    return { text };
+    return JSON.parse(cleanJsonOutput(text));
   } catch (e) {
     console.error("Probate Requirements Error", e);
     // Return fallback information if API fails
     return {
-      text: `
-LOCAL PROBATE REQUIREMENTS FOR ${location}:
-
-1. PROBATE COURT INFORMATION:
-   - Nearest Court: [County Name] Probate Court
-   - Address: [Court Address]
-   - Phone: [Court Phone Number]
-   - Website: [Court Website]
-
-2. FILING FEES:
-   - Basic Probate Filing: [Fee Amount]
-   - Small Estate Fee: [Reduced Fee Amount]
-   - Emergency Filing Fee: [Additional Fee]
-
-3. SMALL ESTATE AFFIDAVIT:
-   - Maximum Value: [Typically $50,000-$100,000]
-   - Waiting Period: [Typically 30-90 days]
-   - Required Forms: Small Estate Affidavit, Death Certificate
-   - Notarization Required: Yes
-
-4. PROCESS TIMELINE:
-   - Initial Filing: 2-4 weeks
-   - creditor Notice Period: 30-90 days
-   - Final Distribution: 4-8 months
-
-5. NEXT STEPS:
-   - Contact the probate clerk's office for specific forms
-   - Gather required documentation (death certificate, will, asset inventory)
-   - Consult with an estate attorney if estate is complex
-      `
+      requirements: `Standard probate process applies for ${location}. Contact the local probate court for specific requirements.`,
+      timeframe: 'Varies by state (typically 3-12 months)',
+      documents: [
+        'Death certificate',
+        'Original will',
+        'List of assets',
+        'Beneficiary information',
+        'Court filing fees'
+      ],
+      notes: 'Please verify with your local probate court as requirements may vary by county.'
     };
   }
 }
 
-export async function getTransportLaws(location: string) {
+export async function getTransportLaws(location: string): Promise<{
+  faaRegulations: string;
+  airlineRequirements: string;
+  funeralHomeRole: string;
+  shippingRestrictions: string[];
+}> {
   try {
-    // Use googleSearch tool to get current regulations
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash-exp",
       contents: [{ parts: [{ text: `
@@ -435,11 +465,30 @@ export async function getTransportLaws(location: string) {
         5. Any current shipping restrictions or special requirements
         6. Best practices for interstate transport of remains
 
-        Please be specific about current regulations and requirements.
+        Return ONLY valid JSON with this exact structure:
+        {
+          "faaRegulations": "FAA regulations description",
+          "airlineRequirements": "Airline requirements description",
+          "funeralHomeRole": "Funeral home role description",
+          "shippingRestrictions": ["restriction1", "restriction2", "restriction3"]
+        }
       ` }] }],
       config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            faaRegulations: { type: Type.STRING },
+            airlineRequirements: { type: Type.STRING },
+            funeralHomeRole: { type: Type.STRING },
+            shippingRestrictions: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
+          }
+        },
         tools: [{ googleSearch: {} }],
-        temperature: 0.1, // Low temperature for factual accuracy
+        temperature: 0.1,
       }
     });
 
@@ -448,30 +497,20 @@ export async function getTransportLaws(location: string) {
       throw new Error('No response from AI');
     }
 
-    return { text };
+    return JSON.parse(cleanJsonOutput(text));
   } catch (e) {
     console.error("Transport Laws Error", e);
     // Return fallback information if API fails
     return {
-      text: `
-FAA REGULATIONS:
-Human remains must be transported in accordance with FAA Part 175. All containers must be leak-proof and constructed of materials adequate to withstand ordinary handling.
-
-AIRLINE REQUIREMENTS:
-Airlines require Known Shipper status for human remains transport. All shipments must be booked as "HUM" (Human Remains) and require proper documentation.
-
-FUNERAL HOME ROLE:
-The receiving funeral home coordinates with the shipping funeral home, handles all documentation, ensures compliance with local regulations, and provides final transportation.
-
-KNOWN SHIPPER STATUS:
-Funeral homes typically have Known Shipper status which allows them to ship human remains. This requires DOT registration and proper vetting by airlines.
-
-SHIPPING RESTRICTIONS:
-- Embalming typically required for air transport
-- Container must be hermetically sealed
-- Advance notice required to airlines
-- No radioactive materials or chemicals allowed
-      `
+      faaRegulations: 'Human remains must be transported in accordance with FAA Part 175. All containers must be leak-proof and constructed of materials adequate to withstand ordinary handling.',
+      airlineRequirements: 'Airlines require Known Shipper status for human remains transport. All shipments must be booked as "HUM" (Human Remains) and require proper documentation.',
+      funeralHomeRole: 'The receiving funeral home coordinates with the shipping funeral home, handles all documentation, ensures compliance with local regulations, and provides final transportation.',
+      shippingRestrictions: [
+        'Embalming typically required for air transport',
+        'Container must be hermetically sealed',
+        'Advance notice required to airlines',
+        'No radioactive materials or chemicals allowed'
+      ]
     };
   }
 }
@@ -497,6 +536,49 @@ function extractPersonalInfo(documentScans: any[]): { fullName?: string; birthDa
   });
 
   return personalInfo;
+}
+
+export async function generateSupportShareMessage(userName: string, deceasedName: string, supportLink: string): Promise<string> {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-preview",
+      contents: [{
+        parts: [{
+          text: `Create a compassionate, warm message that ${userName} can send to friends and family to share a support link for arrangements related to ${deceasedName}'s passing.
+
+Context:
+- User's name: ${userName}
+- Deceased's name: ${deceasedName}
+- Support link: ${supportLink}
+
+Requirements:
+1. Write a brief, heartfelt message (2-3 sentences)
+2. Be warm but not overly emotional
+3. Include the support link naturally in the message
+4. Make it clear this link allows friends to help with tasks
+5. Avoid clichs like "in lieu of flowers" or "celebration of life"
+6. Keep it simple and direct
+7. The message should feel personal and genuine
+
+Please return ONLY the message text, ready to copy and paste. Do not include any explanations or additional text.`
+        }]
+      }],
+      config: {
+        temperature: 0.7,
+      }
+    });
+
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+      throw new Error('No response from AI');
+    }
+
+    return text.trim();
+  } catch (e) {
+    console.error("Support Share Message Generation Error", e);
+    // Return fallback message if API fails
+    return `Hi everyone, as we navigate this difficult time after ${deceasedName}'s passing, I wanted to share a way you can help. I've created a support link where you can see what needs to be done and pick up tasks that would mean a lot to me. Here's the link: ${supportLink} Thank you for being here for me.`;
+  }
 }
 
 export const generateServiceOutline = async (questions: string[], responses: string[], deceasedName?: string, preference?: string, documentScans?: any[]) => {
