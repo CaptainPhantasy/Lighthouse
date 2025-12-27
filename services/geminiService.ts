@@ -113,8 +113,8 @@ export const streamChatResponse = async (
   onChunk: (text: string) => void,
   customSystemInstruction?: string
 ) => {
-  // Use gemini-2.0-flash-exp for high speed and good reasoning
-  const modelId = 'gemini-2.0-flash-exp';
+  // Use gemini-2.5-flash for general chat (2025 SSOT standard)
+  const modelId = 'gemini-2.5-flash';
 
   // Use custom system instruction if provided, otherwise use default
   const systemInstruction = customSystemInstruction ||
@@ -146,8 +146,9 @@ export const streamChatResponse = async (
 
 export const analyzeDocument = async (base64Image: string, mimeType: string) => {
   // List of models to try in order of preference
-  // All models are valid as of December 2024
+  // All models are valid as of December 2025 (2025 SSOT standard)
   const models = [
+    'gemini-2.5-flash',
     'gemini-2.0-flash-exp',
     'gemini-1.5-flash',
     'gemini-1.5-pro'
@@ -265,8 +266,8 @@ Return ONLY this JSON structure:
 // --- Maps Service (Funeral Homes) ---
 
 export const findFuneralHomes = async (latitude: number, longitude: number) => {
-  // gemini-2.0-flash-exp is required for googleMaps tool
-  const modelId = 'gemini-2.0-flash-exp';
+  // gemini-2.5-flash for Google Maps integration (2025 SSOT standard)
+  const modelId = 'gemini-2.5-flash';
 
   try {
     const response = await ai.models.generateContent({
@@ -294,7 +295,8 @@ export const connectLiveSession = async (
   onAudioData: (buffer: AudioBuffer) => void,
   onClose: () => void
 ) => {
-  const modelId = 'gemini-2.0-flash-exp';
+  // gemini-2.5-flash-preview-tts for Text-to-Speech (2025 SSOT standard)
+  const modelId = 'gemini-2.5-flash-preview-tts';
   
   const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
   const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
@@ -372,7 +374,7 @@ export const connectLiveSession = async (
 export const generateSpeech = async (text: string): Promise<AudioBuffer | null> => {
   try {
      const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-2.5-flash-preview-tts", // 2025 SSOT standard for TTS
       contents: [{ parts: [{ text }] }],
       config: {
         responseModalities: [Modality.AUDIO],
@@ -399,7 +401,7 @@ export const generateSpeech = async (text: string): Promise<AudioBuffer | null> 
 export async function generateNotificationDraft(documentType: string, entities: any): Promise<{ text: string }> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-2.5-flash", // 2025 SSOT standard for general tasks
       contents: [{
         parts: [{
           text: `Create a professional, empathetic notification letter for ${documentType} based on the extracted information.
@@ -442,7 +444,7 @@ export async function getLocalProbateRequirements(location: string): Promise<{
 }> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-3-pro-preview", // 2025 SSOT standard for complex reasoning
       contents: [{
         parts: [{
           text: `I need local probate requirements for ${location}. Please provide:
@@ -518,7 +520,7 @@ export async function getTransportLaws(location: string): Promise<{
 }> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-3-pro-preview", // 2025 SSOT standard for complex reasoning
       contents: [{ parts: [{ text: `
         I need current information about transporting human remains from ${location}. Please provide:
         1. FAA regulations for air transport of human remains
@@ -609,7 +611,7 @@ function extractPersonalInfo(documentScans: any[]): { fullName?: string; birthDa
 export async function generateSupportShareMessage(userName: string, deceasedName: string, supportLink: string): Promise<string> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-2.5-flash", // 2025 SSOT standard for general tasks
       contents: [{
         parts: [{
           text: `Create a compassionate, warm message that ${userName} can send to friends and family to share a support link for arrangements related to ${deceasedName}'s passing.
@@ -774,7 +776,7 @@ Important Instructions:
     ];
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-2.5-flash", // 2025 SSOT standard for general tasks
       contents: conversation,
     });
 
