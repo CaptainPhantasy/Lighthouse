@@ -4,6 +4,7 @@ import { UserState, Task, DocumentScan } from '../types';
 import { CheckCircle, FileText, Download, Shield, Trash2, Heart, AlertCircle, Sparkles, Feather, Lock, Gift } from 'lucide-react';
 import { TEXTS } from '../constants';
 import { sanitizeData } from '../utils/encryption';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface ResolutionReportProps {
   userState: UserState;
@@ -44,6 +45,8 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
   serviceOutline,
   onSanitizeData
 }) => {
+  const { isDark } = useTheme();
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSanitizing, setIsSanitizing] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -248,10 +251,10 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
         >
           <Heart className="w-10 h-10 text-white" />
         </motion.div>
-        <h1 className="text-3xl font-bold text-black mb-2">
+        <h1 className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : 'text-black'}`}>
           {TEXTS.legacy_title}
         </h1>
-        <p className="text-black">
+        <p className={isDark ? 'text-stone-300' : 'text-black'}>
           {TEXTS.legacy_subtitle}
         </p>
       </motion.div>
@@ -262,34 +265,34 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.1 }}
-          className="bg-white rounded-xl shadow-lg p-6 text-center"
+          className={`${isDark ? 'bg-stone-900' : 'bg-white'} rounded-xl shadow-lg p-6 text-center`}
         >
-          <div className="text-3xl font-bold text-black mb-2">
+          <div className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : 'text-black'}`}>
             {completedTasks.length}
           </div>
-          <div className="text-black">Tasks Completed</div>
+          <div className={isDark ? 'text-white' : 'text-black'}>Tasks Completed</div>
         </motion.div>
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.2 }}
-          className="bg-white rounded-xl shadow-lg p-6 text-center"
+          className={`${isDark ? 'bg-stone-900' : 'bg-white'} rounded-xl shadow-lg p-6 text-center`}
         >
-          <div className="text-3xl font-bold text-black mb-2">
+          <div className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : 'text-black'}`}>
             {documentScans.length}
           </div>
-          <div className="text-black">Documents Preserved</div>
+          <div className={isDark ? 'text-white' : 'text-black'}>Documents Preserved</div>
         </motion.div>
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.3 }}
-          className="bg-white rounded-xl shadow-lg p-6 text-center"
+          className={`${isDark ? 'bg-stone-900' : 'bg-white'} rounded-xl shadow-lg p-6 text-center`}
         >
-          <div className="text-3xl font-bold text-black mb-2">
+          <div className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : 'text-black'}`}>
             {completionPercentage}%
           </div>
-          <div className="text-black">Complete</div>
+          <div className={isDark ? 'text-white' : 'text-black'}>Complete</div>
         </motion.div>
       </div>
 
@@ -298,22 +301,22 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
-        className="bg-stone-100 border-2 border-stone-200 rounded-2xl p-6 mb-8"
+        className={`${isDark ? 'bg-stone-900 border-stone-800' : 'bg-stone-100 border-stone-200'} border-2 rounded-2xl p-6 mb-8`}
       >
         <div className="flex items-start gap-4">
-          <div className="bg-stone-200 p-4 rounded-xl">
-            <Gift className="w-8 h-8 text-stone-700" />
+          <div className={`${isDark ? 'bg-stone-800' : 'bg-stone-200'} p-4 rounded-xl`}>
+            <Gift className={`w-8 h-8 ${isDark ? 'text-stone-400' : 'text-stone-700'}`} />
           </div>
           <div className="flex-1">
-            <h3 className="text-xl font-bold text-black mb-2">Create a Digital Memorial</h3>
-            <p className="text-black mb-4">
+            <h3 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-black'}`}>Create a Digital Memorial</h3>
+            <p className={isDark ? 'text-stone-400 mb-4' : 'text-black mb-4'}>
               {TEXTS.legacy_export}
             </p>
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => setShowExportModal(true)}
-              className="bg-black hover:bg-stone-800 text-white px-6 py-3 rounded-xl font-medium shadow-md flex items-center gap-2"
+              className={`${isDark ? 'bg-stone-700 hover:bg-stone-600' : 'bg-black hover:bg-stone-800'} text-white px-6 py-3 rounded-xl font-medium shadow-md flex items-center gap-2`}
             >
               <Sparkles className="w-5 h-5" />
               Create Legacy Export
@@ -328,7 +331,7 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={exportAsPDF}
-          className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+          className={`flex-1 ${isDark ? 'bg-stone-800 text-stone-300 hover:bg-stone-700' : 'bg-gray-100 text-black hover:bg-gray-200'} py-3 rounded-xl transition-colors flex items-center justify-center gap-2`}
         >
           <FileText className="w-5 h-5" />
           Print Summary
@@ -338,7 +341,7 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
           whileTap={{ scale: 0.98 }}
           onClick={sanitizeAndDestroy}
           disabled={isSanitizing}
-          className="flex-1 bg-black hover:bg-stone-800 text-white py-3 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
+          className={`flex-1 ${isDark ? 'bg-stone-700 hover:bg-stone-600' : 'bg-black hover:bg-stone-800'} text-white py-3 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-md disabled:opacity-50`}
         >
           <Shield className="w-5 h-5" />
           {isSanitizing ? 'Securing...' : 'Securely Complete Journey'}
@@ -350,15 +353,15 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5 }}
-        className="bg-white rounded-xl shadow-lg p-6 mb-8"
+        className={`${isDark ? 'bg-stone-900' : 'bg-white'} rounded-xl shadow-lg p-6 mb-8`}
       >
-        <h3 className="text-lg font-semibold text-black mb-4">What You've Accomplished</h3>
+        <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-black'}`}>What You've Accomplished</h3>
         <div className="space-y-3">
           {completedTasks.length > 0 ? (
             completedTasks.map(task => (
               <div key={task.id} className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-black" />
-                <span className="text-black">{task.title}</span>
+                <CheckCircle className={`w-5 h-5 ${isDark ? 'text-white' : 'text-black'}`} />
+                <span className={isDark ? 'text-white' : 'text-black'}>{task.title}</span>
               </div>
             ))
           ) : (
@@ -372,19 +375,19 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.6 }}
-        className="text-center p-8 bg-stone-100 rounded-2xl border border-stone-200"
+        className={`text-center p-8 ${isDark ? 'bg-stone-900 border-stone-800' : 'bg-stone-100 border-stone-200'} rounded-2xl border`}
       >
         <motion.div
           animate={{ rotate: [0, 5, -5, 0] }}
           transition={{ duration: 4, repeat: Infinity }}
-          className="w-16 h-16 bg-stone-200 rounded-full flex items-center justify-center mx-auto mb-4"
+          className={`w-16 h-16 ${isDark ? 'bg-stone-800' : 'bg-stone-200'} rounded-full flex items-center justify-center mx-auto mb-4`}
         >
-          <Feather className="w-8 h-8 text-stone-700" />
+          <Feather className={`w-8 h-8 ${isDark ? 'text-stone-400' : 'text-stone-700'}`} />
         </motion.div>
-        <h3 className="text-xl font-semibold text-stone-900 mb-3">
+        <h3 className={`text-xl font-semibold mb-3 ${isDark ? 'text-white' : 'text-stone-900'}`}>
           From Loss to Legacy
         </h3>
-        <p className="text-stone-700 max-w-md mx-auto">
+        <p className={`${isDark ? 'text-stone-400' : 'text-stone-700'} max-w-md mx-auto`}>
           You've navigated this journey with grace and strength. Your loved one's memory lives on—not in the tasks completed, but in the love you shared and the lives they touched.
         </p>
       </motion.div>
@@ -404,30 +407,30 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl"
+              className={`${isDark ? 'bg-stone-900' : 'bg-white'} rounded-2xl max-w-lg w-full p-6 shadow-2xl`}
             >
               <div className="text-center mb-6">
-                <div className="bg-stone-200 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Sparkles className="w-8 h-8 text-stone-700" />
+                <div className={`${isDark ? 'bg-stone-800' : 'bg-stone-200'} w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4`}>
+                  <Sparkles className={`w-8 h-8 ${isDark ? 'text-stone-400' : 'text-stone-700'}`} />
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Legacy Export</h3>
-                <p className="text-gray-600 text-sm">
+                <h3 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>Legacy Export</h3>
+                <p className={`text-sm ${isDark ? 'text-stone-400' : 'text-gray-800'}`}>
                   Create a beautiful digital memorial containing the obituary, service outline, and your completed journey.
                 </p>
               </div>
 
-              <div className="space-y-3 mb-6">
+              <div className={`space-y-3 mb-6 ${isDark ? 'text-stone-400' : ''}`}>
                 <div className="flex items-center gap-3 text-sm">
-                  <Feather className="w-4 h-4 text-stone-600" />
-                  <span className="text-gray-700">Obituary draft</span>
+                  <Feather className={`w-4 h-4 ${isDark ? 'text-stone-500' : 'text-stone-600'}`} />
+                  <span className={isDark ? 'text-stone-300' : 'text-gray-700'}>Obituary draft</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
-                  <FileText className="w-4 h-4 text-stone-600" />
-                  <span className="text-gray-700">Service outline</span>
+                  <FileText className={`w-4 h-4 ${isDark ? 'text-stone-500' : 'text-stone-600'}`} />
+                  <span className={isDark ? 'text-stone-300' : 'text-gray-700'}>Service outline</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
-                  <CheckCircle className="w-4 h-4 text-stone-600" />
-                  <span className="text-gray-700">Completed tasks record</span>
+                  <CheckCircle className={`w-4 h-4 ${isDark ? 'text-stone-500' : 'text-stone-600'}`} />
+                  <span className={isDark ? 'text-stone-300' : 'text-gray-700'}>Completed tasks record</span>
                 </div>
               </div>
 
@@ -437,7 +440,7 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
                   whileTap={{ scale: 0.98 }}
                   onClick={generateLegacyExport}
                   disabled={isGenerating}
-                  className="flex-1 bg-black hover:bg-stone-800 text-white py-3 rounded-xl font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                  className={`flex-1 ${isDark ? 'bg-stone-700 hover:bg-stone-600' : 'bg-black hover:bg-stone-800'} text-white py-3 rounded-xl font-medium flex items-center justify-center gap-2 disabled:opacity-50`}
                 >
                   <Download className="w-4 h-4" />
                   {isGenerating ? 'Creating...' : 'Download Legacy'}
@@ -446,13 +449,13 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setShowExportModal(false)}
-                  className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-colors"
+                  className={`px-6 py-3 ${isDark ? 'bg-stone-800 text-stone-300 hover:bg-stone-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} rounded-xl font-medium transition-colors`}
                 >
                   Cancel
                 </motion.button>
               </div>
 
-              <p className="text-xs text-gray-500 mt-4 text-center flex items-center justify-center gap-1">
+              <p className={`text-xs mt-4 text-center flex items-center justify-center gap-1 ${isDark ? 'text-stone-500' : 'text-gray-700'}`}>
                 <Lock className="w-3 h-3" />
                 Your data remains private and secure
               </p>

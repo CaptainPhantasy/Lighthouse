@@ -5,7 +5,7 @@ import { Heart, HeartHandshake, X, Check, Sparkles, Loader2 } from 'lucide-react
 import { useTheme } from '../contexts/ThemeContext';
 
 interface VolunteerPageProps {
-  requestId: string;
+  requestId?: string;
 }
 
 // Local type for support request data
@@ -19,9 +19,22 @@ interface SupportRequestData {
   fulfilled_at?: string;
 }
 
-const VolunteerPage: React.FC<VolunteerPageProps> = ({ requestId }) => {
+const VolunteerPage: React.FC<VolunteerPageProps> = ({ requestId: propRequestId }) => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+
+  // Extract requestId from URL params if prop not provided
+  const getRequestFromUrl = () => {
+    if (propRequestId) return propRequestId;
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('requestId') || '';
+    }
+    return '';
+  };
+
+  const requestId = getRequestFromUrl();
+
   const [request, setRequest] = useState<SupportRequestData | null>(null);
   const [loading, setLoading] = useState(true);
   const [accepted, setAccepted] = useState(false);
@@ -30,6 +43,12 @@ const VolunteerPage: React.FC<VolunteerPageProps> = ({ requestId }) => {
   const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
+    if (!requestId) {
+      setError('No request ID provided.');
+      setLoading(false);
+      return;
+    }
+
     async function fetchRequest() {
       const result = await getSupportRequest(requestId);
       if (result.success && result.data) {
@@ -87,7 +106,7 @@ const VolunteerPage: React.FC<VolunteerPageProps> = ({ requestId }) => {
           >
             <Loader2 className="w-10 h-10 animate-spin" />
           </motion.div>
-          <p className={`font-medium ${isDark ? 'text-stone-400' : 'text-stone-500'}`}>Loading...</p>
+          <p className={`font-medium ${isDark ? 'text-stone-400' : 'text-stone-700'}`}>Loading...</p>
         </motion.div>
       </div>
     );
@@ -102,10 +121,10 @@ const VolunteerPage: React.FC<VolunteerPageProps> = ({ requestId }) => {
           className={`${isDark ? 'bg-stone-900 border-stone-800' : 'bg-white border-stone-200'} rounded-3xl shadow-xl p-10 max-w-md w-full text-center border`}
         >
           <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 ${isDark ? 'bg-stone-800' : 'bg-stone-200'}`}>
-            <X className={`w-10 h-10 ${isDark ? 'text-stone-400' : 'text-stone-500'}`} strokeWidth={2} />
+            <X className={`w-10 h-10 ${isDark ? 'text-stone-400' : 'text-stone-700'}`} strokeWidth={2} />
           </div>
           <h2 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : ''}`}>Request Not Found</h2>
-          <p className={isDark ? 'text-stone-400' : 'text-stone-500'}>{error || 'This support request could not be found.'}</p>
+          <p className={isDark ? 'text-stone-400' : 'text-stone-700'}>{error || 'This support request could not be found.'}</p>
         </motion.div>
       </div>
     );
@@ -137,7 +156,7 @@ const VolunteerPage: React.FC<VolunteerPageProps> = ({ requestId }) => {
           <h1 className={`text-2xl md:text-3xl font-light ${isDark ? 'text-white' : ''}`}>
             Support Request
           </h1>
-          <p className={`mt-2 flex items-center justify-center gap-2 ${isDark ? 'text-stone-400' : 'text-stone-500'}`}>
+          <p className={`mt-2 flex items-center justify-center gap-2 ${isDark ? 'text-stone-400' : 'text-stone-700'}`}>
             <Sparkles className="w-4 h-4" />
             Lighthouse Support Circle
           </p>
@@ -159,7 +178,7 @@ const VolunteerPage: React.FC<VolunteerPageProps> = ({ requestId }) => {
               <Check className="w-8 h-8" strokeWidth={2.5} />
             </motion.div>
             <p className="font-bold text-lg">Thank you so much!</p>
-            <p className={`text-sm mt-1 ${isDark ? 'text-stone-300' : 'text-stone-600'}`}>You've accepted this support request.</p>
+            <p className={`text-sm mt-1 ${isDark ? 'text-stone-300' : 'text-stone-800'}`}>You've accepted this support request.</p>
           </motion.div>
         )}
 
@@ -170,7 +189,7 @@ const VolunteerPage: React.FC<VolunteerPageProps> = ({ requestId }) => {
             animate={{ opacity: 1, scale: 1 }}
             className={`${isDark ? 'bg-stone-800 border-stone-700' : 'bg-stone-100 border-stone-300'} border rounded-3xl p-6 mb-8 text-center`}
           >
-            <p className={isDark ? 'text-stone-300' : 'text-stone-600'}>Thank you for letting us know.</p>
+            <p className={isDark ? 'text-stone-300' : 'text-stone-800'}>Thank you for letting us know.</p>
           </motion.div>
         )}
 
@@ -182,16 +201,16 @@ const VolunteerPage: React.FC<VolunteerPageProps> = ({ requestId }) => {
             className="space-y-6"
           >
             <div className={`${isDark ? 'bg-stone-800 border-stone-700' : 'bg-stone-100 border-stone-200'} rounded-3xl p-6 border`}>
-              <p className={`text-sm uppercase tracking-wide mb-2 ${isDark ? 'text-stone-400' : 'text-stone-500'}`}>Request Type</p>
+              <p className={`text-sm uppercase tracking-wide mb-2 ${isDark ? 'text-stone-400' : 'text-stone-700'}`}>Request Type</p>
               <p className={`text-xl font-bold ${isDark ? 'text-white' : ''}`}>{request.request_type}</p>
             </div>
 
             <div className="flex items-center justify-between px-2">
-              <span className={`text-sm ${isDark ? 'text-stone-400' : 'text-stone-500'}`}>Status</span>
+              <span className={`text-sm ${isDark ? 'text-stone-400' : 'text-stone-700'}`}>Status</span>
               <span className={`px-4 py-1.5 rounded-full text-sm font-bold ${
                 request.status === 'pending' ? (isDark ? 'bg-stone-700 text-white' : 'bg-stone-300 text-black') :
                 request.status === 'fulfilled' ? (isDark ? 'bg-white text-black' : 'bg-black text-white') :
-                (isDark ? 'bg-stone-800 text-stone-300' : 'bg-stone-200 text-stone-600')
+                (isDark ? 'bg-stone-800 text-stone-300' : 'bg-stone-200 text-black')
               }`}>
                 {request.status === 'pending' ? 'Awaiting Response' :
                  request.status === 'fulfilled' ? 'Accepted' :
@@ -232,7 +251,7 @@ const VolunteerPage: React.FC<VolunteerPageProps> = ({ requestId }) => {
 
             {request.status === 'declined' && (
               <div className={`${isDark ? 'bg-stone-800 border-stone-700' : 'bg-stone-100 border-stone-300'} border rounded-3xl p-6 text-center`}>
-                <p className={isDark ? 'text-stone-300' : 'text-stone-600'}>This request was declined.</p>
+                <p className={isDark ? 'text-stone-300' : 'text-stone-800'}>This request was declined.</p>
               </div>
             )}
           </motion.div>

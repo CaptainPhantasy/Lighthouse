@@ -120,7 +120,7 @@ const BentoGridOverview: React.FC<{
         <h2 className={`text-2xl font-bold mb-2 ${isDark ? 'text-white' : ''}`}>
           Welcome back, <ColourfulText text={userState.name || 'Friend'} />
         </h2>
-        <p className={isDark ? 'text-stone-300' : 'text-stone-600'}>
+        <p className={isDark ? 'text-stone-300' : 'text-stone-800'}>
           {isTransportPriority
             ? "You have an urgent task requiring attention. Let's take this one step at a time."
             : !hasTasks
@@ -202,7 +202,7 @@ const BentoGridOverview: React.FC<{
               whileHover={{ x: 3 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => onTabChange('ASSIST')}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'bg-stone-800 hover:bg-stone-700' : 'bg-stone-100 hover:bg-stone-200'}`}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'bg-stone-800 hover:bg-stone-700 text-white' : 'bg-stone-100 hover:bg-stone-200 text-black'}`}
             >
               <span>Ask AI Guide</span>
               <ArrowRight className="w-4 h-4" />
@@ -211,7 +211,7 @@ const BentoGridOverview: React.FC<{
               whileHover={{ x: 3 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => onTabChange('VAULT')}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'bg-stone-800 hover:bg-stone-700' : 'bg-stone-100 hover:bg-stone-200'}`}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'bg-stone-800 hover:bg-stone-700 text-white' : 'bg-stone-100 hover:bg-stone-200 text-black'}`}
             >
               <span>Scan Document</span>
               <ArrowRight className="w-4 h-4" />
@@ -228,14 +228,14 @@ const BentoGridOverview: React.FC<{
         >
           <div className="flex items-center gap-3">
             <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isDark ? 'bg-stone-700' : 'bg-stone-200'}`}>
-              <Clock className="w-6 h-6" />
+              <Clock className={`w-6 h-6 ${isDark ? 'text-white' : 'text-black'}`} />
             </div>
             <div>
               <p className="text-sm opacity-70">Pending Tasks</p>
               <p className="text-2xl font-bold">{pendingTasks}</p>
             </div>
             {pendingTasks > 0 && (
-              <ArrowRight className="w-4 h-4 ml-auto" />
+              <ArrowRight className={`w-4 h-4 ml-auto ${isDark ? 'text-white' : 'text-black'}`} />
             )}
           </div>
         </BentoCard>
@@ -250,13 +250,13 @@ const BentoGridOverview: React.FC<{
           >
             <div className="flex items-center gap-3">
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isDark ? 'bg-stone-700' : 'bg-stone-200'}`}>
-                <AlertTriangle className="w-6 h-6" />
+                <AlertTriangle className={`w-6 h-6 ${isDark ? 'text-white' : 'text-black'}`} />
               </div>
               <div>
                 <p className="text-sm opacity-70">High Priority</p>
                 <p className="text-2xl font-bold">{highPriorityTasks}</p>
               </div>
-              <ArrowRight className="w-4 h-4 ml-auto" />
+              <ArrowRight className={`w-4 h-4 ml-auto ${isDark ? 'text-white' : 'text-black'}`} />
             </div>
           </BentoCard>
         )}
@@ -270,7 +270,7 @@ const BentoGridOverview: React.FC<{
         >
           <div className="flex items-center gap-3">
             <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isDark ? 'bg-stone-700' : 'bg-stone-200'}`}>
-              <FileText className="w-6 h-6" />
+              <FileText className={`w-6 h-6 ${isDark ? 'text-white' : 'text-black'}`} />
             </div>
             <div>
               <p className="text-sm opacity-70">Documents</p>
@@ -379,7 +379,7 @@ const NavItem: React.FC<{
           : 'bg-black text-white font-medium'
         : isDark
           ? 'hover:bg-stone-800 text-stone-300'
-          : 'hover:bg-stone-200 text-stone-600'
+          : 'hover:bg-stone-200 text-black'
     }`}
   >
     <Icon className="w-5 h-5" strokeWidth={2} />
@@ -462,7 +462,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             </div>
             <div>
               <h1 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-black'}`}><ColourfulText text={TEXTS.app_name} /></h1>
-              {userState.name && <p className={`text-xs ${isDark ? 'text-stone-400' : 'text-stone-500'}`}>For {userState.name}</p>}
+              {userState.name && <p className={`text-xs ${isDark ? 'text-stone-400' : 'text-stone-700'}`}>For {userState.name}</p>}
             </div>
           </div>
 
@@ -492,7 +492,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               <div className="text-2xl">{userState.brainFogLevel > 3 ? '☁️' : '☀️'}</div>
               <div className="text-sm">
                 <p className="font-medium">Mode</p>
-                <p className="text-xs text-stone-500 dark:text-stone-400">{userState.brainFogLevel > 3 ? 'Calm' : 'Clear'}</p>
+                <p className="text-xs text-stone-800 dark:text-stone-400">{userState.brainFogLevel > 3 ? 'Calm' : 'Clear'}</p>
               </div>
             </div>
             {/* Theme Toggle */}
@@ -510,12 +510,12 @@ const Dashboard: React.FC<DashboardProps> = ({
               <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mb-6 bg-black text-white border-2 border-stone-800 rounded-2xl p-5 shadow-lg flex items-center gap-4"
+                className={`mb-6 border-2 rounded-2xl p-5 shadow-lg flex items-center gap-4 ${isDark ? 'bg-stone-800 text-white border-stone-700' : 'bg-stone-100 text-black border-stone-200'}`}
               >
                 <motion.div
                   animate={{ rotate: [0, 10, -10, 0] }}
                   transition={{ duration: 2, repeat: Infinity }}
-                  className="w-12 h-12 rounded-xl bg-white text-black flex items-center justify-center flex-shrink-0"
+                  className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${isDark ? 'bg-white text-black' : 'bg-black text-white'}`}
                 >
                   <AlertTriangle className="w-6 h-6" />
                 </motion.div>
@@ -527,7 +527,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setActiveTab('TASKS')}
-                  className="px-5 py-2.5 bg-white text-black text-sm font-bold rounded-xl hover:bg-stone-200 transition-colors"
+                  className={`px-5 py-2.5 text-sm font-bold rounded-xl transition-colors ${isDark ? 'bg-white text-black hover:bg-stone-200' : 'bg-black text-white hover:bg-stone-800'}`}
                 >
                   View Guide
                 </motion.button>
@@ -544,7 +544,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 transition={{ duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }}
               >
                 {isTransportPriority && activeTab === 'TASKS' ? (
-                  <div className="bg-black text-white border-2 border-stone-800 rounded-2xl p-6">
+                  <div className={`border-2 rounded-2xl p-6 ${isDark ? 'bg-stone-800 text-white border-stone-700' : 'bg-stone-100 text-black border-stone-200'}`}>
                     <TransportNavigator userState={userState} />
                   </div>
                 ) : activeTab === 'OVERVIEW' ? (
@@ -576,10 +576,19 @@ const Dashboard: React.FC<DashboardProps> = ({
                         documentScans={documentScans}
                         onServicePreferenceChange={onServicePreferenceChange}
                         onServiceOutlineChange={onServiceOutlineChange}
+                        onDocumentFinding={(finding) => {
+                          // Show toast and add message to assistant when document findings occur
+                          showToast(
+                            finding.message,
+                            'success',
+                            'View in Guide',
+                            () => setActiveTab('ASSIST')
+                          );
+                        }}
                       />
                     )}
                     {activeTab === 'TRANSPORT' && (
-                      <div className="bg-white border border-stone-200 rounded-2xl p-6">
+                      <div className={`border rounded-2xl p-6 ${isDark ? 'bg-stone-900 border-stone-800' : 'bg-white border-stone-200'}`}>
                         <TransportNavigator userState={userState} />
                       </div>
                     )}
@@ -612,7 +621,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             <h2 className="font-bold">Lighthouse AI</h2>
           </div>
           <div className={`rounded-2xl p-4 mb-6 ${isDark ? 'bg-stone-800' : 'bg-stone-100'}`}>
-            <p className={`text-sm mb-4 ${isDark ? 'text-stone-300' : 'text-stone-600'}`}>
+            <p className={`text-sm mb-4 ${isDark ? 'text-stone-300' : 'text-stone-800'}`}>
               I'm your compassionate assistant. I can help guide you through this difficult time.
             </p>
             <div className="space-y-2">
@@ -632,11 +641,11 @@ const Dashboard: React.FC<DashboardProps> = ({
             <h3 className={`text-sm font-bold mb-3 uppercase tracking-wide ${isDark ? 'text-stone-400' : ''}`}>Quick Summary</h3>
             <div className="grid grid-cols-2 gap-2">
               <div className={`rounded-xl p-3 text-center ${isDark ? 'bg-stone-800' : 'bg-stone-100'}`}>
-                <p className={`text-xs uppercase ${isDark ? 'text-stone-400' : 'text-stone-500'}`}>Total</p>
+                <p className={`text-xs uppercase ${isDark ? 'text-stone-400' : 'text-stone-800'}`}>Total</p>
                 <p className="text-2xl font-bold">{tasks.length}</p>
               </div>
               <div className={`rounded-xl p-3 text-center ${isDark ? 'bg-stone-800' : 'bg-stone-100'}`}>
-                <p className={`text-xs uppercase ${isDark ? 'text-stone-400' : 'text-stone-500'}`}>Done</p>
+                <p className={`text-xs uppercase ${isDark ? 'text-stone-400' : 'text-stone-800'}`}>Done</p>
                 <p className="text-2xl font-bold">{tasks.filter(t => t.status === 'COMPLETED').length}</p>
               </div>
             </div>
@@ -667,7 +676,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               </div>
               <div>
                 <h1 className={`text-lg font-bold ${isDark ? 'text-white' : ''}`}><ColourfulText text={TEXTS.app_name} /></h1>
-                {userState.name && <p className={`text-xs ${isDark ? 'text-stone-400' : 'text-stone-500'}`}>For {userState.name}</p>}
+                {userState.name && <p className={`text-xs ${isDark ? 'text-stone-400' : 'text-stone-700'}`}>For {userState.name}</p>}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -686,12 +695,12 @@ const Dashboard: React.FC<DashboardProps> = ({
             <motion.div
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-6 bg-black text-white border-2 border-stone-800 rounded-2xl p-5 shadow-lg flex items-center gap-4"
+              className={`mb-6 border-2 rounded-2xl p-5 shadow-lg flex items-center gap-4 ${isDark ? 'bg-stone-800 text-white border-stone-700' : 'bg-stone-100 text-black border-stone-200'}`}
             >
               <motion.div
                 animate={{ rotate: [0, 10, -10, 0] }}
                 transition={{ duration: 2, repeat: Infinity }}
-                className="w-12 h-12 rounded-xl bg-white text-black flex items-center justify-center flex-shrink-0"
+                className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${isDark ? 'bg-white text-black' : 'bg-black text-white'}`}
               >
                 <AlertTriangle className="w-6 h-6" />
               </motion.div>
@@ -703,7 +712,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setActiveTab('TASKS')}
-                className="px-4 py-2 bg-white text-black text-xs font-bold rounded-xl"
+                className={`px-4 py-2 text-xs font-bold rounded-xl ${isDark ? 'bg-white text-black' : 'bg-black text-white'}`}
               >
                 View
               </motion.button>
@@ -720,7 +729,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               transition={{ duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }}
             >
               {isTransportPriority && activeTab === 'TASKS' ? (
-                <div className="bg-black text-white border-2 border-stone-800 rounded-2xl p-6">
+                <div className={`border-2 rounded-2xl p-6 ${isDark ? 'bg-stone-800 text-white border-stone-700' : 'bg-stone-100 text-black border-stone-200'}`}>
                   <TransportNavigator userState={userState} />
                 </div>
               ) : activeTab === 'OVERVIEW' ? (
@@ -750,7 +759,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     />
                   )}
                   {activeTab === 'TRANSPORT' && (
-                    <div className="bg-white border border-stone-200 rounded-2xl p-6">
+                    <div className={`border rounded-2xl p-6 ${isDark ? 'bg-stone-900 border-stone-800' : 'bg-white border-stone-200'}`}>
                       <TransportNavigator userState={userState} />
                     </div>
                   )}

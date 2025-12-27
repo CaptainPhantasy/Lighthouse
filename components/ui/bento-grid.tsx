@@ -32,14 +32,14 @@ const BentoCard = ({
   index = 0,
   isDark = false,
 }: BentoCardProps) => {
-  // Clean black/white theme with dark mode support
+  // Clean theme: light cards with dark text in light mode, dark cards with light text in dark mode
   const typeStyles = {
     default: isDark
       ? "bg-stone-900 border-stone-800 text-white"
       : "bg-white border-stone-200 text-black",
     primary: isDark
-      ? "bg-white text-black border-stone-600"
-      : "bg-black text-white border-stone-800",
+      ? "bg-stone-800 border-stone-700 text-white"
+      : "bg-white border-stone-200 text-black",
     success: isDark
       ? "bg-stone-800 border-stone-700 text-white"
       : "bg-stone-100 border-stone-300 text-black",

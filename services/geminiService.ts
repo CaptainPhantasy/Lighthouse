@@ -1,6 +1,6 @@
 import { GoogleGenAI, LiveServerMessage, Modality, Type, FunctionDeclaration } from "@google/genai";
 
-const apiKey = process.env.API_KEY || '';
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
 // Lighthouse Officiant Co-Pilot System Instruction
@@ -102,17 +102,21 @@ function createBlob(data: Float32Array): { data: string; mimeType: string } {
 export const streamChatResponse = async (
   history: { role: string; parts: { text: string }[] }[],
   message: string,
-  onChunk: (text: string) => void
+  onChunk: (text: string) => void,
+  customSystemInstruction?: string
 ) => {
-  // Use gemini-3-pro-preview for high EQ and complex reasoning
-  const modelId = 'gemini-3-pro-preview';
+  // Use gemini-2.0-flash-exp for high speed and good reasoning
+  const modelId = 'gemini-2.0-flash-exp';
+
+  // Use custom system instruction if provided, otherwise use default
+  const systemInstruction = customSystemInstruction ||
+    "You are Lighthouse, a compassionate estate orchestrator. You help users navigate the logistics of death. Be calm, empathetic, and ultra-organized. Use 'restoration' instead of 'cleanup'. If the user seems overwhelmed, suggest delegating tasks. Use short, clear paragraphs.";
 
   try {
     const chat = ai.chats.create({
       model: modelId,
       config: {
-        systemInstruction: "You are Lighthouse, a compassionate estate orchestrator. You help users navigate the logistics of death. Be calm, empathetic, and ultra-organized. Use 'restoration' instead of 'cleanup'. If the user seems overwhelmed, suggest delegating tasks. Use short, clear paragraphs.",
-        thinkingConfig: { thinkingBudget: 1024 }, // Enable thinking for better EQ
+        systemInstruction: systemInstruction,
         tools: [{ googleSearch: {} }], // Enable grounding for current laws/info
       },
     });
@@ -133,68 +137,128 @@ export const streamChatResponse = async (
 // --- Vision Service (Smart Vault) ---
 
 export const analyzeDocument = async (base64Image: string, mimeType: string) => {
-  // Use gemini-3-pro-preview for best OCR and reasoning
-  const modelId = 'gemini-3-pro-preview';
-  
-  try {
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: mimeType,
-              data: base64Image
-            }
-          },
-          {
-            text: "Analyze this document. Identify the document type (Will, Insurance, ID, etc). Extract key entities like Names, Policy Numbers, Dates, and Beneficiaries. If it's an Insurance Policy, extract company name and policy number. If it's a Will, extract executor name. Return JSON with optional taskSuggestion field."
-          }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            documentType: { type: Type.STRING },
-            summary: { type: Type.STRING },
-            entities: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  key: { type: Type.STRING },
-                  value: { type: Type.STRING }
-                }
+  // List of models to try in order of preference
+  const models = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash-exp',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro'
+  ];
+
+  const enhancedPrompt = `You are a document analysis expert for a bereavement support app. Analyze this image carefully.
+
+DOCUMENT TYPES TO IDENTIFY:
+- WILL: Legal will, testament, last will and testament
+- INSURANCE: Life insurance policy, insurance certificate
+- ID: Driver's license, passport, state ID, social security card
+- DEATH_CERTIFICATE: Death certificate, certificate of death
+- OBITUARY: Newspaper obituary, funeral announcement
+- OTHER: Any other document
+
+EXTRACTION RULES:
+1. For WILLS: Extract "Executor" name, "Testator" (person who made the will), "Date Signed"
+2. For INSURANCE: Extract "Insurance Company", "Policy Number", "Beneficiary", "Coverage Amount"
+3. For IDs: Extract "Full Name", "Date of Birth", "ID Number", "Expiration Date"
+4. For DEATH_CERTIFICATES: Extract "Deceased Name", "Date of Death", "Place of Death", "Cause" (if listed)
+
+CRITICAL OUTPUT REQUIREMENTS:
+- You MUST return valid JSON only
+- Do not include markdown formatting like \`\`\`json
+- Return at least 2-3 extracted entities if possible
+- If document type is unclear, use "OTHER"
+- Always provide a brief summary
+
+Return ONLY this JSON structure:
+{
+  "documentType": "WILL|INSURANCE|ID|DEATH_CERTIFICATE|OBITUARY|OTHER",
+  "summary": "Brief 1-2 sentence description of what this document is",
+  "entities": [
+    {"key": "Field Name", "value": "Extracted Value"}
+  ]
+}`;
+
+  let lastError = null;
+
+  for (const modelId of models) {
+    try {
+      console.log(`Attempting document analysis with model: ${modelId}`);
+
+      const response = await ai.models.generateContent({
+        model: modelId,
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64Image
               }
             },
-            taskSuggestion: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                description: { type: Type.STRING },
-                priority: { type: Type.STRING },
-                category: { type: Type.STRING }
-              }
+            {
+              text: enhancedPrompt
             }
-          }
+          ]
+        }
+      });
+
+      const responseText = response.text;
+      console.log(`Raw response from ${modelId}:`, responseText?.substring(0, 200) + '...');
+
+      if (!responseText || responseText.trim().length === 0) {
+        throw new Error('Empty response from Gemini');
+      }
+
+      // Try to parse as JSON
+      let parsed;
+      try {
+        parsed = JSON.parse(cleanJsonOutput(responseText));
+      } catch (parseError) {
+        // If direct parsing fails, try to extract JSON from markdown
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          parsed = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error('Could not extract JSON from response');
         }
       }
-    });
-    
-    return JSON.parse(cleanJsonOutput(response.text || '{}'));
-  } catch (error) {
-    console.error("Vision Error:", error);
-    throw error;
+
+      // Validate the response has required fields
+      if (!parsed.documentType) {
+        parsed.documentType = 'OTHER';
+      }
+      if (!parsed.summary) {
+        parsed.summary = `Document analyzed as ${parsed.documentType}`;
+      }
+      if (!Array.isArray(parsed.entities)) {
+        parsed.entities = [];
+      }
+
+      console.log(`Successfully analyzed document as: ${parsed.documentType}`);
+      return parsed;
+
+    } catch (error) {
+      console.error(`Failed with model ${modelId}:`, error);
+      lastError = error;
+      continue; // Try next model
+    }
   }
+
+  // All models failed - return a fallback result
+  console.error('All Gemini models failed, using fallback:', lastError);
+
+  return {
+    documentType: 'OTHER',
+    summary: 'Document was scanned but could not be auto-analyzed. Please verify the details manually.',
+    entities: [
+      { key: 'Note', value: 'AI analysis unavailable - please review document manually' }
+    ]
+  };
 };
 
 // --- Maps Service (Funeral Homes) ---
 
 export const findFuneralHomes = async (latitude: number, longitude: number) => {
-  // gemini-2.5-flash is required for googleMaps tool
-  const modelId = 'gemini-2.5-flash';
+  // gemini-2.0-flash-exp is required for googleMaps tool
+  const modelId = 'gemini-2.0-flash-exp';
 
   try {
     const response = await ai.models.generateContent({
@@ -222,7 +286,7 @@ export const connectLiveSession = async (
   onAudioData: (buffer: AudioBuffer) => void,
   onClose: () => void
 ) => {
-  const modelId = 'gemini-2.5-flash-native-audio-preview-09-2025';
+  const modelId = 'gemini-2.0-flash-exp';
   
   const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
   const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
@@ -300,7 +364,7 @@ export const connectLiveSession = async (
 export const generateSpeech = async (text: string): Promise<AudioBuffer | null> => {
   try {
      const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
+      model: "gemini-2.0-flash-exp",
       contents: [{ parts: [{ text }] }],
       config: {
         responseModalities: [Modality.AUDIO],
@@ -327,7 +391,7 @@ export const generateSpeech = async (text: string): Promise<AudioBuffer | null> 
 export async function generateNotificationDraft(documentType: string, entities: any): Promise<{ text: string }> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
+      model: "gemini-2.0-flash-exp",
       contents: [{
         parts: [{
           text: `Create a professional, empathetic notification letter for ${documentType} based on the extracted information.
@@ -355,24 +419,8 @@ Format the letter as a complete, ready-to-use document that the user can copy an
     return { text };
   } catch (e) {
     console.error("Notification Draft Error", e);
-    // Return fallback notification draft
     return {
-      text: `
-Dear [Recipient Name],
-
-I am writing to inform you about the recent passing of [Deceased Name], who was the [Relationship/Policy Holder] for this ${documentType} account.
-
-The following information has been extracted from relevant documents:
-${entities.map((entity: any) => `${entity.key}: ${entity.value}`).join('\n')}
-
-Please advise on the next steps required to process this matter, including any documentation needed to update the account or initiate a claim.
-
-Thank you for your attention to this important matter during this difficult time.
-
-Sincerely,
-[Your Name]
-[Your Contact Information]
-      `
+      text: `Dear [Recipient Name],\n\nI am writing to inform you about the recent passing of [Deceased Name].\n\nPlease advise on the next steps.\n\nSincerely,\n[Your Name]`
     };
   }
 }
@@ -382,10 +430,11 @@ export async function getLocalProbateRequirements(location: string): Promise<{
   timeframe: string;
   documents: string[];
   notes?: string;
+  summary: string; // TTS-optimized summary with short, punchy sentences
 }> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
+      model: "gemini-2.0-flash-exp",
       contents: [{
         parts: [{
           text: `I need local probate requirements for ${location}. Please provide:
@@ -395,13 +444,16 @@ export async function getLocalProbateRequirements(location: string): Promise<{
 4. Local probate process timeline and requirements
 5. Contact information for probate clerks
 
-Return ONLY valid JSON with this exact structure:
+CRITICAL: You MUST return ONLY valid JSON with this exact structure. No additional text, no markdown code blocks.
 {
   "requirements": "Summary of probate requirements",
   "timeframe": "Expected timeline (e.g., '3-6 months')",
   "documents": ["doc1", "doc2", "doc3"],
-  "notes": "Additional important notes"
-}`
+  "notes": "Additional important notes",
+  "summary": "Short TTS-optimized summary. Use simple sentences. Each under 10 words. Speak directly. Avoid jargon. Example: File at county court. Bring the death certificate. The process takes three months."
+}
+
+The summary field MUST be optimized for Text-to-Speech: short sentences, clear pronunciation, spoken naturally.`
         }]
       }],
       config: {
@@ -415,7 +467,8 @@ Return ONLY valid JSON with this exact structure:
               type: Type.ARRAY,
               items: { type: Type.STRING }
             },
-            notes: { type: Type.STRING }
+            notes: { type: Type.STRING },
+            summary: { type: Type.STRING }
           }
         },
         tools: [{ googleSearch: {} }],
@@ -442,7 +495,8 @@ Return ONLY valid JSON with this exact structure:
         'Beneficiary information',
         'Court filing fees'
       ],
-      notes: 'Please verify with your local probate court as requirements may vary by county.'
+      notes: 'Please verify with your local probate court as requirements may vary by county.',
+      summary: 'File at the county probate court. Bring the death certificate and original will. The process takes three to twelve months. Small estates may use a simplified affidavit.'
     };
   }
 }
@@ -452,6 +506,7 @@ export async function getTransportLaws(location: string): Promise<{
   airlineRequirements: string;
   funeralHomeRole: string;
   shippingRestrictions: string[];
+  summary: string; // TTS-optimized summary with short, punchy sentences
 }> {
   try {
     const response = await ai.models.generateContent({
@@ -465,13 +520,16 @@ export async function getTransportLaws(location: string): Promise<{
         5. Any current shipping restrictions or special requirements
         6. Best practices for interstate transport of remains
 
-        Return ONLY valid JSON with this exact structure:
+        CRITICAL: You MUST return ONLY valid JSON with this exact structure. No additional text, no markdown code blocks.
         {
           "faaRegulations": "FAA regulations description",
           "airlineRequirements": "Airline requirements description",
           "funeralHomeRole": "Funeral home role description",
-          "shippingRestrictions": ["restriction1", "restriction2", "restriction3"]
+          "shippingRestrictions": ["restriction1", "restriction2", "restriction3"],
+          "summary": "Short TTS-optimized summary. Use simple sentences. Each under 10 words. Speak directly. Example: Airlines require a funeral home. Remains must be embalmed. Book flights in advance. Call the funeral home first."
         }
+
+        The summary field MUST be optimized for Text-to-Speech: short sentences, clear pronunciation, spoken naturally.
       ` }] }],
       config: {
         responseMimeType: "application/json",
@@ -484,7 +542,8 @@ export async function getTransportLaws(location: string): Promise<{
             shippingRestrictions: {
               type: Type.ARRAY,
               items: { type: Type.STRING }
-            }
+            },
+            summary: { type: Type.STRING }
           }
         },
         tools: [{ googleSearch: {} }],
@@ -510,7 +569,8 @@ export async function getTransportLaws(location: string): Promise<{
         'Container must be hermetically sealed',
         'Advance notice required to airlines',
         'No radioactive materials or chemicals allowed'
-      ]
+      ],
+      summary: 'You must use a funeral home for transport. The remains need to be embalmed. Airlines require advance booking. Your funeral home handles all the paperwork.'
     };
   }
 }
@@ -541,7 +601,7 @@ function extractPersonalInfo(documentScans: any[]): { fullName?: string; birthDa
 export async function generateSupportShareMessage(userName: string, deceasedName: string, supportLink: string): Promise<string> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
+      model: "gemini-2.0-flash-exp",
       contents: [{
         parts: [{
           text: `Create a compassionate, warm message that ${userName} can send to friends and family to share a support link for arrangements related to ${deceasedName}'s passing.
@@ -705,7 +765,10 @@ Important Instructions:
       }
     ];
 
-    const response = await ai.generateContent(conversation);
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash-exp",
+      contents: conversation,
+    });
 
     const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) {

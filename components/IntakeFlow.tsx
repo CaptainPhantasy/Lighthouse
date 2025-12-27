@@ -8,6 +8,7 @@ import { PlaceholdersAndVanishInput } from './ui/placeholders-and-vanish-input';
 import { AuroraBackground } from './ui/aurora-background';
 import { MultiStepLoader } from './ui/multi-step-loader';
 import ColourfulText from './ui/colourful-text';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface IntakeFlowProps {
   onComplete: (data: UserState) => void;
@@ -56,14 +57,15 @@ const CompassionateButton: React.FC<{
   className?: string;
   disabled?: boolean;
   fullWidth?: boolean;
-}> = ({ onClick, children, variant = 'primary', className = '', disabled = false, fullWidth = false }) => {
+  isDark?: boolean;
+}> = ({ onClick, children, variant = 'primary', className = '', disabled = false, fullWidth = false, isDark = false }) => {
   const baseStyles = "rounded-2xl font-medium transition-all duration-500 transform";
   const widthClass = fullWidth ? "w-full" : "";
 
   const variantStyles = {
-    primary: "bg-black hover:bg-stone-800 text-white shadow-lg",
-    secondary: "bg-white/80 hover:bg-white border-2 border-stone-200 hover:border-stone-300 hover:shadow-lg text-stone-700 backdrop-blur-sm",
-    gentle: "bg-stone-100/80 hover:bg-stone-200/80 text-stone-600 backdrop-blur-sm",
+    primary: isDark ? "bg-stone-700 hover:bg-stone-600 text-white shadow-lg" : "bg-black hover:bg-stone-800 text-white shadow-lg",
+    secondary: isDark ? "bg-stone-800/80 hover:bg-stone-700 border-2 border-stone-700 hover:shadow-lg text-white backdrop-blur-sm" : "bg-white/80 hover:bg-white border-2 border-stone-200 hover:border-stone-300 hover:shadow-lg text-black backdrop-blur-sm",
+    gentle: isDark ? "bg-stone-800/80 hover:bg-stone-700/80 text-white backdrop-blur-sm" : "bg-stone-100/80 hover:bg-stone-200/80 text-black backdrop-blur-sm",
   };
 
   return (
@@ -72,7 +74,7 @@ const CompassionateButton: React.FC<{
       whileHover={{ scale: disabled ? 1 : 1.02 }}
       onClick={onClick}
       disabled={disabled}
-      className={`${baseStyles} ${variantStyles[variant]} ${widthClass} px-6 py-3.5 ${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+      className={`${baseStyles} ${variantStyles[variant as keyof typeof variantStyles]} ${widthClass} px-6 py-3.5 ${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
       {children}
     </motion.button>
@@ -80,6 +82,8 @@ const CompassionateButton: React.FC<{
 };
 
 const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
+  const { isDark } = useTheme();
+
   // Initialize state from localStorage if available
   const [step, setStep] = useState<IntakeStep>(() => {
     if (typeof window !== 'undefined') {
@@ -101,13 +105,34 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
   const [showLoader, setShowLoader] = useState(false);
 
   // Voice input for deceased name
-  const { isListening: isListeningForVoice, transcript: voiceTranscript, startListening: startVoiceListening, stopListening: stopVoiceListening, browserSupportsSpeechRecognition } = useSpeechToText();
+  const { isListening: isListeningForVoice, transcript: voiceTranscript, startListening: startVoiceListening, stopListening: stopVoiceListening, browserSupportsSpeechRecognition, interimTranscript } = useSpeechToText();
 
   // Auto-save effect
   useEffect(() => {
     localStorage.setItem('lighthouse_intake_step', step);
     localStorage.setItem('lighthouse_intake_data', JSON.stringify(formData));
   }, [step, formData]);
+
+  // Auto-advance after voice input with sufficient content
+  const [shouldAutoAdvance, setShouldAutoAdvance] = useState(false);
+
+  useEffect(() => {
+    // Only auto-advance when not actively listening (speech has concluded)
+    // and we have a substantial transcript
+    if (!isListeningForVoice && voiceTranscript && voiceTranscript.trim().length > 2 && shouldAutoAdvance) {
+      // Small delay to ensure the transcript is complete
+      const timer = setTimeout(() => {
+        if (step === IntakeStep.USER_INTRO && !formData.name) {
+          handleNext(IntakeStep.IMMEDIATE_STATUS, { name: voiceTranscript.trim() });
+        } else if (step === IntakeStep.IDENTITY && !formData.deceasedName) {
+          // For identity step, we need to wait for veteran question
+          setFormData(prev => ({ ...prev, deceasedName: voiceTranscript.trim() }));
+        }
+        setShouldAutoAdvance(false);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [isListeningForVoice, voiceTranscript, step, formData.name, formData.deceasedName, shouldAutoAdvance]);
 
   const handleNext = (nextStep: IntakeStep, updates: Partial<UserState>) => {
     const newData = { ...formData, ...updates };
@@ -139,13 +164,10 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
   const toggleVoiceInput = () => {
     if (isListeningForVoice) {
       stopVoiceListening();
+      setShouldAutoAdvance(true); // Enable auto-advance after stopping
     } else {
-      // Set the appropriate field based on current step
-      if (step === IntakeStep.USER_INTRO) {
-        setFormData({ ...formData, name: voiceTranscript });
-      } else {
-        setFormData({ ...formData, deceasedName: voiceTranscript });
-      }
+      // Clear existing transcript and start fresh
+      clearTranscript?.();
       startVoiceListening({ continuous: true, interimResults: true });
     }
   };
@@ -254,6 +276,7 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
                   variant="primary"
                   fullWidth
                   className="py-4 text-lg"
+                  isDark={isDark}
                 >
                   I am safe
                 </CompassionateButton>
@@ -297,6 +320,19 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
                           : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
                       }`}
                       title={isListeningForVoice ? "Stop voice input" : "Use voice input"}
+                      animate={isListeningForVoice ? {
+                        scale: [1, 1.05, 1],
+                        boxShadow: [
+                          '0 0 0 0 rgba(239, 68, 68, 0.4)',
+                          '0 0 0 8px rgba(239, 68, 68, 0)',
+                          '0 0 0 0 rgba(239, 68, 68, 0)'
+                        ]
+                      } : {}}
+                      transition={{
+                        duration: 1.5,
+                        repeat: isListeningForVoice ? Infinity : 0,
+                        ease: "easeInOut"
+                      }}
                     >
                       {isListeningForVoice ? (
                         <MicOff className="w-4 h-4" />
@@ -339,6 +375,7 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
                   variant="primary"
                   fullWidth
                   disabled={!formData.name && !voiceTranscript}
+                  isDark={isDark}
                 >
                   Continue
                 </CompassionateButton>
@@ -427,12 +464,14 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
                   <CompassionateButton
                     onClick={() => handleNext(IntakeStep.IDENTITY, { deathPronounced: true })}
                     variant="secondary"
+                    isDark={isDark}
                   >
                     Yes
                   </CompassionateButton>
                   <CompassionateButton
                     onClick={() => handleNext(IntakeStep.IDENTITY, { deathPronounced: false })}
                     variant="secondary"
+                    isDark={isDark}
                   >
                     No / Not Sure
                   </CompassionateButton>
@@ -467,6 +506,19 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
                           : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
                       }`}
                       title={isListeningForVoice ? "Stop voice input" : "Use voice input"}
+                      animate={isListeningForVoice ? {
+                        scale: [1, 1.05, 1],
+                        boxShadow: [
+                          '0 0 0 0 rgba(239, 68, 68, 0.4)',
+                          '0 0 0 8px rgba(239, 68, 68, 0)',
+                          '0 0 0 0 rgba(239, 68, 68, 0)'
+                        ]
+                      } : {}}
+                      transition={{
+                        duration: 1.5,
+                        repeat: isListeningForVoice ? Infinity : 0,
+                        ease: "easeInOut"
+                      }}
                     >
                       {isListeningForVoice ? (
                         <MicOff className="w-4 h-4" />
@@ -511,6 +563,7 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
                       onClick={() => handleNext(IntakeStep.BRAIN_FOG, { isVeteran: true })}
                       variant="secondary"
                       className="flex-1"
+                      isDark={isDark}
                     >
                       Yes
                     </CompassionateButton>
@@ -518,6 +571,7 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
                       onClick={() => handleNext(IntakeStep.BRAIN_FOG, { isVeteran: false })}
                       variant="secondary"
                       className="flex-1"
+                      isDark={isDark}
                     >
                       No
                     </CompassionateButton>

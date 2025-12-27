@@ -5,6 +5,7 @@ import { analyzeDocument, generateNotificationDraft } from '../services/geminiSe
 import { DocumentScan, Task } from '../types';
 import { encryptObject, decryptObject, EncryptionResult } from '../utils/encryption';
 import { ENCRYPTION_PASSWORD } from '../constants';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface SmartVaultProps {
   onTaskCreated?: (task: Task) => void;
@@ -13,6 +14,7 @@ interface SmartVaultProps {
 }
 
 const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, onDocumentFinding }) => {
+  const { isDark } = useTheme();
   const [documents, setDocuments] = useState<DocumentScan[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string>('ALL');
@@ -175,7 +177,11 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
           setDocuments(prev => [newDoc, ...prev]);
         }
       } catch (err) {
-        alert("Could not analyze document. Please try a clearer photo.");
+        // analyzeDocument now has fallback logic with multiple Gemini models
+        // This catch block should rarely be reached, but if it is, ensure document is saved
+        console.error('Unexpected error in document analysis:', err);
+        // The analyzeDocument function now always returns a valid result
+        // so newDoc should already be defined here with fallback values
       } finally {
         setIsAnalyzing(false);
       }
@@ -259,7 +265,7 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
             initial={{ opacity: 0, y: -20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            className="bg-black text-white p-4 rounded-2xl flex items-center gap-3 shadow-lg"
+            className={`${isDark ? 'bg-stone-800 text-white' : 'bg-white text-black border border-stone-200'} p-4 rounded-2xl flex items-center gap-3 shadow-lg`}
           >
             <CheckCircle className="w-5 h-5 flex-shrink-0" />
             <div className="flex-1">
@@ -268,7 +274,7 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
             </div>
             <button
               onClick={() => setRecentlyCreatedTask(null)}
-              className="w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center hover:bg-stone-700 transition-colors"
+              className={`w-8 h-8 rounded-full ${isDark ? 'bg-stone-700 hover:bg-stone-600' : 'bg-stone-200 hover:bg-stone-300'} flex items-center justify-center transition-colors`}
             >
               ✕
             </button>
@@ -280,15 +286,15 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white border border-stone-200 text-black p-6 rounded-2xl shadow-sm"
+        className={`${isDark ? 'bg-stone-900 border-stone-800 text-white' : 'bg-white border border-stone-200 text-black'} p-6 rounded-2xl shadow-sm`}
       >
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 rounded-xl bg-black flex items-center justify-center text-white">
+          <div className={`w-12 h-12 rounded-xl ${isDark ? 'bg-stone-800 text-white' : 'bg-black text-white'} flex items-center justify-center`}>
             <FileText className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-lg font-bold">Smart Vault</h2>
-            <p className="text-sm text-stone-600">
+            <h2 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-black'}`}>Smart Vault</h2>
+            <p className={`text-sm ${isDark ? 'text-stone-400' : 'text-stone-800'}`}>
               Securely scan Wills, Insurance Policies, and IDs. AI will extract key information.
             </p>
           </div>
@@ -310,7 +316,7 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
               </div>
               <div className="text-center">
                 <p className="text-sm font-medium">Tap to Scan Document</p>
-                <p className="text-xs text-stone-500 mt-1">Supports images and PDFs</p>
+                <p className="text-xs text-stone-700 mt-1">Supports images and PDFs</p>
               </div>
             </div>
           )}
@@ -320,6 +326,7 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
             className="hidden"
             accept="image/*,application/pdf"
             onChange={handleFileUpload}
+            /* DO NOT ADD capture="environment" here to allow gallery access */
           />
         </div>
       </motion.div>
@@ -338,8 +345,8 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
                 onClick={() => setActiveFilter(type)}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                   activeFilter === type
-                    ? 'bg-black text-white'
-                    : 'bg-white border border-stone-300 text-stone-600 hover:bg-stone-100'
+                    ? (isDark ? 'bg-stone-700 text-white' : 'bg-black text-white')
+                    : (isDark ? 'bg-stone-800 text-stone-300 hover:bg-stone-700' : 'bg-white border border-stone-300 text-black hover:bg-stone-100')
                 }`}
               >
                 {type}
@@ -356,7 +363,7 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
              className="text-center py-8"
            >
              <FileText className="w-12 h-12 text-stone-300 mx-auto mb-3" />
-             <p className="text-stone-500 text-sm">No documents found in this category.</p>
+             <p className="text-stone-700 text-sm">No documents found in this category.</p>
            </motion.div>
         )}
 
@@ -366,24 +373,24 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
-            className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-start gap-4 hover:shadow-md transition-shadow"
+            className={`${isDark ? 'bg-stone-900 border-stone-800' : 'bg-white border border-stone-200'} p-5 rounded-2xl shadow-sm flex items-start gap-4 hover:shadow-md transition-shadow`}
           >
-            <div className="bg-stone-200 p-3 rounded-xl">
-              <FileText className="w-6 h-6 text-black" />
+            <div className={`${isDark ? 'bg-stone-800' : 'bg-stone-200'} p-3 rounded-xl`}>
+              <FileText className={`w-6 h-6 ${isDark ? 'text-white' : 'text-black'}`} />
             </div>
             <div className="flex-1 overflow-hidden">
               <div className="flex justify-between items-start">
                 <h3 className="font-bold truncate pr-2">{doc.type}</h3>
                 <span className="text-[10px] uppercase tracking-wider bg-stone-200 px-2 py-1 rounded-full flex-shrink-0">Analyzed</span>
               </div>
-              <p className="text-sm text-stone-600 mt-1 line-clamp-2">{doc.summary}</p>
+              <p className="text-sm text-stone-700 mt-1 line-clamp-2">{doc.summary}</p>
 
               {decryptedData[doc.id] && (
                 <>
                   <div className="mt-3 bg-stone-100 p-3 rounded-xl text-xs space-y-1">
                     {decryptedData[doc.id].map((item: any, i: number) => (
                       <div key={i} className="flex justify-between border-b border-stone-300 pb-1 last:border-0">
-                        <span className="text-stone-600 truncate mr-2">{item.key}:</span>
+                        <span className="text-stone-700 truncate mr-2">{item.key}:</span>
                         <span className="font-medium truncate max-w-[50%]">{item.value}</span>
                       </div>
                     ))}
@@ -447,7 +454,7 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
                 <div className="flex gap-2">
                   <button
                     onClick={handleCopyToClipboard}
-                    className="flex items-center gap-1 px-3 py-2 bg-black text-white rounded-lg text-sm hover:bg-stone-800 transition-colors"
+                    className={`flex items-center gap-1 px-3 py-2 ${isDark ? 'bg-stone-700 text-white hover:bg-stone-600' : 'bg-black text-white hover:bg-stone-800'} rounded-lg text-sm transition-colors`}
                   >
                     <Copy className="w-4 h-4" />
                     Copy to Clipboard

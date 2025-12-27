@@ -6,6 +6,10 @@ import { Share2, CheckCircle, Circle, Clock, Filter, AlertTriangle, Eye, EyeOff,
 import LocalLegalGuide from './LocalLegalGuide';
 import { createSupportRequest } from '../services/supportRequestService';
 import { generateSupportShareMessage } from '../services/geminiService';
+import { useTheme } from '../contexts/ThemeContext';
+
+// Track generated support links to avoid duplicates
+const taskLinkCache = new Map<string, string>();
 
 interface DelegationHubProps {
   userState: UserState;
@@ -13,6 +17,8 @@ interface DelegationHubProps {
 }
 
 const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   // Toast notification state
   const [toast, setToast] = useState<{message: string, visible: boolean}>({message: '', visible: false});
 
@@ -98,16 +104,50 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
 
   const categories = ['ALL', 'LEGAL', 'LOGISTICS', 'FINANCIAL', 'CEREMONY'];
 
-  const handleDelegate = (taskId: string) => {
-    // In a real app, this generates a unique link
-    const link = `https://lighthouse.app/task/${taskId}/delegate`;
-    navigator.clipboard.writeText(link);
+  const handleDelegate = async (taskId: string) => {
+    // Check if we already have a cached link for this task
+    const cachedLink = taskLinkCache.get(taskId);
+    if (cachedLink) {
+      navigator.clipboard.writeText(cachedLink);
+      showToast(`Link copied! Send this to a friend to let them handle this task.`);
+      return;
+    }
 
-    // Show toast notification instead of alert
-    showToast(`Link copied! Send this to a friend to let them handle this task: ${link}`);
+    // Find the task to get its details
+    const task = [...MOCK_TASKS, ...dynamicTasks].find(t => t.id === taskId);
+    if (!task) return;
+
+    // Create a "live" SupportRequest in the database
+    try {
+      const result = await createSupportRequest(
+        userState.name ? `user-${userState.name.replace(/\s+/g, '-').toLowerCase()}` : 'anonymous',
+        `task-${taskId}@lighthouse.local`, // Placeholder email for task delegation
+        `Task: ${task.title}`
+      );
+
+      if (result.success && result.magicLink) {
+        // Cache the link for future use
+        taskLinkCache.set(taskId, result.magicLink);
+        navigator.clipboard.writeText(result.magicLink);
+        showToast(`Link copied! Send this to a friend to let them handle: ${task.title}`);
+      } else {
+        // Fallback to static link if database creation fails
+        const fallbackLink = `https://lighthouse.app/task/${taskId}/delegate`;
+        taskLinkCache.set(taskId, fallbackLink);
+        navigator.clipboard.writeText(fallbackLink);
+        showToast(`Link copied! Send this to a friend to let them handle this task: ${fallbackLink}`);
+      }
+    } catch (err) {
+      console.error('Failed to create support request:', err);
+      // Fallback to static link
+      const fallbackLink = `https://lighthouse.app/task/${taskId}/delegate`;
+      taskLinkCache.set(taskId, fallbackLink);
+      navigator.clipboard.writeText(fallbackLink);
+      showToast(`Link copied! Send this to a friend to let them handle this task: ${fallbackLink}`);
+    }
 
     setDynamicTasks(prev => prev.map(t =>
-        t.id === taskId ? { ...t, status: 'DELEGATED' } : t
+      t.id === taskId ? { ...t, status: 'DELEGATED' } : t
     ));
   };
 
@@ -129,7 +169,7 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
       switch(p) {
           case 'URGENT': return 'text-black bg-stone-200 border-2 border-black';
           case 'HIGH': return 'text-black bg-stone-200 border border-stone-400';
-          default: return 'text-stone-600 bg-stone-100 border border-stone-300';
+          default: return 'text-black bg-stone-100 border border-stone-300';
       }
   }
 
@@ -214,7 +254,7 @@ return (
             initial={{ opacity: 0, y: -50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed top-4 right-4 bg-black text-white px-4 py-3 rounded-xl shadow-xl z-50"
+            className={`fixed top-4 right-4 px-4 py-3 rounded-xl shadow-xl z-50 ${isDark ? 'bg-stone-800 text-white' : 'bg-stone-900 text-white'}`}
           >
             <div className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4" />
@@ -227,10 +267,10 @@ return (
        <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200"
+        className={`p-6 rounded-2xl shadow-sm border ${isDark ? 'bg-stone-900 border-stone-800 text-white' : 'bg-white border-stone-200'}`}
        >
           <h2 className="text-xl font-bold mb-1">Restoration Plan</h2>
-          <p className="text-stone-600 text-sm">
+          <p className={`text-sm ${isDark ? 'text-stone-300' : 'text-stone-800'}`}>
               You don't have to do this alone. Use the <span className="font-bold">Ask Support Circle</span> button to generate task links you can share with friends and family.
           </p>
        </motion.div>
@@ -240,10 +280,10 @@ return (
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="bg-black text-white border-2 border-stone-800 rounded-2xl p-6"
+        className={`border-2 rounded-2xl p-6 ${isDark ? 'bg-stone-800 text-white border-stone-700' : 'bg-stone-100 text-black border-stone-200'}`}
        >
          <div className="flex items-start gap-4">
-           <div className="bg-stone-800 p-3 rounded-xl">
+           <div className={`p-3 rounded-xl ${isDark ? 'bg-stone-700' : 'bg-stone-300'}`}>
              <Users className="w-6 h-6" />
            </div>
            <div className="flex-1">
@@ -256,7 +296,7 @@ return (
                whileTap={{ scale: isGeneratingLink ? 1 : 0.98 }}
                onClick={handleGenerateSupportLink}
                disabled={isGeneratingLink}
-               className="bg-white text-black hover:bg-stone-200 px-5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+               className={`px-5 py-2.5 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${isDark ? 'bg-white text-black hover:bg-stone-200' : 'bg-black text-white hover:bg-stone-800'}`}
              >
                {isGeneratingLink ? (
                  <>
@@ -291,7 +331,7 @@ return (
                className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors border ${
                  activeCategory === cat
                    ? 'bg-black text-white border-black'
-                   : 'bg-white text-stone-600 border-stone-300 hover:bg-stone-100'
+                   : 'bg-white text-black border-stone-300 hover:bg-stone-100'
                }`}
              >
                {cat.charAt(0) + cat.slice(1).toLowerCase()}
@@ -389,7 +429,7 @@ return (
                       </motion.button>
                       <div className={`${task.status === 'COMPLETED' ? 'opacity-60' : ''}`}>
                           <h3 className={`font-bold ${task.status === 'COMPLETED' ? 'line-through' : ''}`}>{task.title}</h3>
-                          <p className="text-sm text-stone-600 mt-1 leading-relaxed">{task.description}</p>
+                          <p className="text-sm text-stone-700 mt-1 leading-relaxed">{task.description}</p>
                           {task.status === 'COMPLETED' && (
                             <p className="text-xs font-bold mt-1">✓ Completed</p>
                           )}
@@ -422,14 +462,14 @@ return (
                    <Heart className="w-8 h-8" />
                  </div>
                  <h3 className="text-xl font-bold mb-2">Your Support Circle Link</h3>
-                 <p className="text-stone-600 text-sm">
+                 <p className={`text-sm ${isDark ? 'text-stone-300' : 'text-stone-800'}`}>
                    Share this link with trusted friends and family. They can pick up tasks without you seeing the details.
                  </p>
                </div>
 
                <div className="bg-stone-100 border-2 border-stone-300 rounded-xl p-4 mb-4">
                  <div className="flex items-center gap-2">
-                   <LinkIcon className="w-4 h-4 text-stone-500 flex-shrink-0" />
+                   <LinkIcon className="w-4 h-4 text-stone-700 flex-shrink-0" />
                    <code className="text-sm truncate flex-1">
                      {generatedLink}
                    </code>
@@ -439,16 +479,16 @@ return (
                {/* Share Message Section */}
                <div className="mb-4">
                  <div className="flex items-center gap-2 mb-2">
-                   <MessageSquare className="w-4 h-4 text-stone-600" />
+                   <MessageSquare className="w-4 h-4 text-stone-700" />
                    <h4 className="font-bold text-sm">Share Message</h4>
                  </div>
-                 <p className="text-xs text-stone-600 mb-2">
+                 <p className="text-xs text-stone-700 mb-2">
                    Edit this message before sending to friends and family
                  </p>
 
                  {isGeneratingMessage ? (
                    <div className="bg-stone-100 border border-stone-300 rounded-xl p-4 flex items-center justify-center min-h-[120px]">
-                     <div className="flex items-center gap-2 text-stone-600">
+                     <div className="flex items-center gap-2 text-stone-700">
                        <Loader2 className="w-4 h-4 animate-spin" />
                        <span className="text-sm">Generating message...</span>
                      </div>
@@ -485,7 +525,7 @@ return (
                  </motion.button>
                </div>
 
-               <p className="text-xs text-stone-500 mt-4 text-center flex items-center justify-center gap-1">
+               <p className="text-xs text-stone-700 mt-4 text-center flex items-center justify-center gap-1">
                  <Lock className="w-3 h-3" />
                  Only share with people you trust
                </p>

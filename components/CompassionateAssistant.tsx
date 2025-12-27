@@ -5,20 +5,25 @@ import { streamChatResponse, connectLiveSession, generateSpeech, generateService
 import { ChatMessage, UserState, DocumentScan, ServicePreference } from '../types';
 import { SERVICE_PREFERENCES, OFFICIANT_QUESTIONS, SERVICE_TEMPLATES } from '../constants';
 import useSpeechToText from '../hooks/useSpeechToText';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface AssistantProps {
   userState: UserState;
   documentScans: DocumentScan[];
   onServicePreferenceChange?: (preference: ServicePreference) => void;
   onServiceOutlineChange?: (outline: string) => void;
+  onDocumentFinding?: (finding: { message: string; type: string }) => void;
 }
 
 const CompassionateAssistant: React.FC<AssistantProps> = ({
   userState,
   documentScans,
   onServicePreferenceChange,
-  onServiceOutlineChange
+  onServiceOutlineChange,
+  onDocumentFinding
 }) => {
+  const { isDark } = useTheme();
+
   // Assistant modes: CHAT (normal), MEMORY_RECORDING (for capturing memories)
   type AssistantMode = 'CHAT' | 'MEMORY_RECORDING';
   const [assistantMode, setAssistantMode] = useState<AssistantMode>('CHAT');
@@ -79,6 +84,25 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const hasShownTransportMessage = useRef<boolean>(false);
+  const hasShownPronouncementMessage = useRef<boolean>(false);
+  const hasShownDocumentContextMessage = useRef<boolean>(false);
+
+  // Build document context string for AI
+  const buildDocumentContext = () => {
+    if (documentScans.length === 0) return '';
+
+    const docSummary = documentScans.map(doc => {
+      let summary = `- ${doc.type}`;
+      if (doc.summary) summary += `: ${doc.summary}`;
+      if (doc.extractedData && Array.isArray(doc.extractedData)) {
+        const keyInfo = doc.extractedData.slice(0, 3).map((e: any) => `${e.key}=${e.value}`).join(', ');
+        if (keyInfo) summary += ` (${keyInfo})`;
+      }
+      return summary;
+    }).join('\n');
+
+    return `\n\nDOCUMENTS IN VAULT:\n${docSummary}`;
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -119,6 +143,72 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
       hasShownTransportMessage.current = true;
     }
   }, [userState.deceasedLocation]);
+
+  // Show proactive pronouncement message when death hasn't been pronounced
+  useEffect(() => {
+    if (
+      !userState.deathPronounced &&
+      !hasShownPronouncementMessage.current &&
+      userState.deceasedLocation
+    ) {
+      let pronouncementMessage = '';
+
+      if (userState.deceasedLocation === 'HOME') {
+        pronouncementMessage = "Since your loved one is at home and hasn't been pronounced yet, you'll need to contact the local coroner or medical examiner. They'll come to you. Would you like help finding the nearest coroner's contact information?";
+      } else if (userState.deceasedLocation === 'HOSPITAL') {
+        pronouncementMessage = "Since your loved one is at the hospital, the medical staff will handle the pronouncement. The hospital social worker can also help guide you through the next steps. Is there anything specific about the hospital process you'd like to know?";
+      } else if (userState.deceasedLocation === 'OUT_OF_STATE') {
+        pronouncementMessage = "For out-of-state situations, pronouncement typically happens at the facility where they passed. The funeral home there will coordinate with a local funeral home near you. Would you like me to explain the transport process?";
+      }
+
+      if (pronouncementMessage) {
+        const message: ChatMessage = {
+          id: Date.now().toString(),
+          role: 'model',
+          content: pronouncementMessage,
+          timestamp: new Date()
+        };
+
+        setMessages(prev => [...prev, message]);
+        hasShownPronouncementMessage.current = true;
+      }
+    }
+  }, [userState.deathPronounced, userState.deceasedLocation]);
+
+  // Show proactive document context message when documents are scanned
+  useEffect(() => {
+    if (
+      documentScans.length > 0 &&
+      !hasShownDocumentContextMessage.current
+    ) {
+      // Find documents with key information
+      const keyDocs = documentScans.filter(doc =>
+        doc.type === 'WILL' || doc.type === 'INSURANCE'
+      );
+
+      if (keyDocs.length > 0) {
+        const docNames = keyDocs.map(d => d.type).join(' and ');
+        const docMessage: ChatMessage = {
+          id: Date.now().toString(),
+          role: 'model',
+          content: `I noticed you've scanned a ${docNames}. Would you like me to help you understand the next steps based on what I found in the document?`,
+          timestamp: new Date()
+        };
+
+        setMessages(prev => [...prev, docMessage]);
+        hasShownDocumentContextMessage.current = true;
+      }
+    }
+  }, [documentScans]);
+
+  // Handle document findings from SmartVault
+  useEffect(() => {
+    if (onDocumentFinding) {
+      // Override the callback to add system messages to the chat
+      const originalCallback = onDocumentFinding;
+      // We'll trigger this when documents are found in SmartVault
+    }
+  }, [onDocumentFinding]);
 
   // Handle service preference change
   const handlePreferenceChange = (preference: ServicePreference) => {
@@ -186,6 +276,19 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
     setIsThinking(true);
 
     try {
+      // Build enhanced system instruction with document context
+      const documentContext = buildDocumentContext();
+      const enhancedSystemInstruction = `You are Lighthouse, a compassionate estate orchestrator. You help users navigate the logistics of death. Be calm, empathetic, and ultra-organized. Use 'restoration' instead of 'cleanup'. If the user seems overwhelmed, suggest delegating tasks. Use short, clear paragraphs.
+
+CURRENT CONTEXT:
+- User Name: ${userState.name || 'Friend'}
+- Deceased: ${userState.deceasedName || 'Their loved one'}
+- Location: ${userState.deceasedLocation || 'Unknown'}
+- Death Pronounced: ${userState.deathPronounced ? 'Yes' : 'No'}
+- Brain Fog Level: ${userState.brainFogLevel || 3}/5${documentContext}
+
+When the user asks "What do I do next?" or similar, proactively reference the documents in the vault if relevant. For example, if there's an Insurance Policy, suggest calling the carrier. If there's a Will, mention contacting the executor.`;
+
       // Collect the streamed response
       let fullResponse = '';
       await streamChatResponse(
@@ -193,7 +296,8 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
         userMessage.content,
         (chunk) => {
           fullResponse += chunk;
-        }
+        },
+        enhancedSystemInstruction
       );
 
       const assistantMessage: ChatMessage = {
@@ -607,7 +711,7 @@ ${template.closingSection}`;
     <div className="flex flex-col h-full relative">
       {/* Toast Notification */}
       {toast.visible && (
-        <div className="fixed top-4 right-4 bg-black text-white px-4 py-3 rounded-xl shadow-xl z-50 animate-fade-in">
+        <div className={`fixed top-4 right-4 ${isDark ? 'bg-stone-800 text-white' : 'bg-white text-black border border-stone-200'} px-4 py-3 rounded-xl shadow-xl z-50 animate-fade-in`}>
           <div className="flex items-center gap-2">
             <CheckCircle className="w-4 h-4" />
             <span className="text-sm font-medium">{toast.message}</span>
@@ -615,8 +719,8 @@ ${template.closingSection}`;
         </div>
       )}
       {/* Service Preference Selector */}
-      <div className="mb-4 p-4 bg-white border border-stone-200 rounded-2xl">
-        <label className="block text-sm font-bold mb-2">
+      <div className={`mb-4 p-4 ${isDark ? 'bg-stone-900 border-stone-800' : 'bg-white border border-stone-200'} rounded-2xl`}>
+        <label className={`block text-sm font-bold mb-2 ${isDark ? 'text-white' : 'text-black'}`}>
           Service Preference
         </label>
         <div className="flex gap-2 flex-wrap">
@@ -626,8 +730,8 @@ ${template.closingSection}`;
               onClick={() => handlePreferenceChange(key as ServicePreference)}
               className={`px-3 py-2 rounded-xl text-sm font-bold transition-all border ${
                 servicePreference === key
-                  ? 'bg-black text-white border-black'
-                  : 'bg-white text-stone-600 border-stone-300 hover:bg-stone-100'
+                  ? (isDark ? 'bg-stone-700 text-white border-stone-600' : 'bg-black text-white border-black')
+                  : (isDark ? 'bg-stone-800 text-stone-400 border-stone-700 hover:bg-stone-700' : 'bg-white text-stone-600 border-stone-300 hover:bg-stone-100')
               }`}
             >
               {value}
@@ -641,7 +745,7 @@ ${template.closingSection}`;
         <button
           onClick={generateServiceOutline}
           disabled={isGeneratingOutline}
-          className="flex items-center gap-2 bg-black hover:bg-stone-800 text-white px-4 py-2 rounded-xl font-bold transition-all disabled:opacity-50"
+          className={`flex items-center gap-2 ${isDark ? 'bg-stone-700 hover:bg-stone-600' : 'bg-black hover:bg-stone-800'} text-white px-4 py-2 rounded-xl font-bold transition-all disabled:opacity-50`}
         >
           <DraftingCompass className="w-4 h-4" />
           {isGeneratingOutline ? 'Generating...' : 'Draft Service Outline'}
@@ -649,14 +753,14 @@ ${template.closingSection}`;
       </div>
 
       {/* Mode Toggle: Chat vs Memory Recording */}
-      <div className="flex gap-2 mb-4 p-1 bg-stone-200 rounded-xl">
+      <div className={`flex gap-2 mb-4 p-1 ${isDark ? 'bg-stone-800' : 'bg-stone-200'} rounded-xl`}>
         <motion.button
           whileTap={{ scale: 0.95 }}
           onClick={() => setAssistantMode('CHAT')}
           className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
             assistantMode === 'CHAT'
-              ? 'bg-black text-white'
-              : 'text-stone-600 hover:text-black'
+              ? (isDark ? 'bg-stone-700 text-white' : 'bg-black text-white')
+              : (isDark ? 'text-stone-400 hover:text-stone-200' : 'text-stone-600 hover:text-black')
           }`}
         >
           <BookOpen className="w-4 h-4" />
@@ -667,8 +771,8 @@ ${template.closingSection}`;
           onClick={() => setAssistantMode('MEMORY_RECORDING')}
           className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
             assistantMode === 'MEMORY_RECORDING'
-              ? 'bg-black text-white'
-              : 'text-stone-600 hover:text-black'
+              ? (isDark ? 'bg-stone-700 text-white' : 'bg-black text-white')
+              : (isDark ? 'text-stone-400 hover:text-stone-200' : 'text-stone-600 hover:text-black')
           }`}
         >
           <Heart className="w-4 h-4" />
@@ -687,12 +791,12 @@ ${template.closingSection}`;
             transition={{ duration: 0.3 }}
             className="mb-4 overflow-hidden"
           >
-            <div className="bg-stone-100 border border-stone-300 rounded-xl p-4">
+            <div className={`${isDark ? 'bg-stone-800 border-stone-700' : 'bg-stone-100 border-stone-300'} rounded-xl p-4`}>
               <div className="flex items-center gap-2 mb-3">
                 <Heart className="w-5 h-5" />
-                <h3 className="font-bold">Memory Recording Mode</h3>
+                <h3 className={`font-bold ${isDark ? 'text-white' : 'text-black'}`}>Memory Recording Mode</h3>
               </div>
-              <p className="text-sm text-stone-600 mb-4">
+              <p className={`text-sm ${isDark ? 'text-stone-400' : 'text-stone-600'} mb-4`}>
                 Share your favorite memories of {userState.deceasedName || 'your loved one'}. Speak from the heart - I'll organize them into a beautiful service outline.
               </p>
 
@@ -702,7 +806,7 @@ ${template.closingSection}`;
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={startMemoryRecording}
-                  className="w-full bg-black hover:bg-stone-800 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"
+                  className={`w-full ${isDark ? 'bg-stone-700 hover:bg-stone-600' : 'bg-black hover:bg-stone-800'} text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2`}
                 >
                   <Mic className="w-5 h-5" />
                   Start Recording Memory
@@ -712,7 +816,7 @@ ${template.closingSection}`;
                   <motion.div
                     animate={{ scale: [1, 1.02, 1] }}
                     transition={{ duration: 1.5, repeat: Infinity }}
-                    className="bg-black rounded-xl p-4 text-center"
+                    className={`${isDark ? 'bg-stone-700' : 'bg-black'} rounded-xl p-4 text-center`}
                   >
                     <div className="flex items-center justify-center gap-2 text-white mb-2">
                       <motion.div
@@ -729,7 +833,7 @@ ${template.closingSection}`;
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={stopMemoryRecording}
-                    className="w-full bg-stone-800 hover:bg-stone-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"
+                    className={`w-full ${isDark ? 'bg-stone-800 hover:bg-stone-700' : 'bg-stone-800 hover:bg-stone-700'} text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2`}
                   >
                     <StopCircle className="w-5 h-5" />
                     Stop & Save Memory
@@ -741,7 +845,7 @@ ${template.closingSection}`;
               {memories.length > 0 && (
                 <div className="mt-4 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold">
+                    <span className={`text-sm font-bold ${isDark ? 'text-white' : 'text-black'}`}>
                       {memories.length} {memories.length === 1 ? 'Memory' : 'Memories'} Recorded
                     </span>
                   </div>
@@ -751,7 +855,7 @@ ${template.closingSection}`;
                         key={idx}
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="bg-white rounded-lg p-3 text-sm text-stone-700 border border-stone-300"
+                        className={`${isDark ? 'bg-stone-900 text-stone-300 border-stone-700' : 'bg-white text-stone-700 border-stone-300'} rounded-lg p-3 text-sm border`}
                       >
                         "{memory.substring(0, 100)}{memory.length > 100 ? '...' : ''}"
                       </motion.div>
@@ -767,7 +871,7 @@ ${template.closingSection}`;
                   whileTap={{ scale: 0.98 }}
                   onClick={generateOutlineFromMemories}
                   disabled={isGeneratingOutline}
-                  className="w-full mt-4 bg-black hover:bg-stone-800 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                  className={`w-full mt-4 ${isDark ? 'bg-stone-700 hover:bg-stone-600' : 'bg-black hover:bg-stone-800'} text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50`}
                 >
                   <Sparkles className="w-5 h-5" />
                   {isGeneratingOutline ? 'Weaving Memories...' : 'Create Service from Memories'}
@@ -783,12 +887,12 @@ ${template.closingSection}`;
         {messages.map((message) => (
           <div key={message.id} className={`flex ${message.role === 'model' ? 'justify-start' : 'justify-end'}`}>
             <div className={`max-w-[80%] rounded-2xl p-4 ${message.role === 'model'
-              ? 'bg-black text-white'
-              : 'bg-stone-200 text-black'}`}>
+              ? (isDark ? 'bg-stone-800 text-white' : 'bg-black text-white')
+              : (isDark ? 'bg-stone-700 text-white' : 'bg-stone-200 text-black')}`}>
 
               {message.role === 'model' && (
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                  <div className={`w-2 h-2 ${isDark ? 'bg-white' : 'bg-stone-400'} rounded-full animate-pulse`}></div>
                   <span className="text-xs opacity-80">Lighthouse AI</span>
                 </div>
               )}
@@ -800,7 +904,7 @@ ${template.closingSection}`;
                     <input
                       type="text"
                       placeholder="Share your thoughts..."
-                      className="w-full px-3 py-2 bg-white border border-stone-300 rounded-lg text-sm focus:outline-none focus:border-black"
+                      className={`w-full px-3 py-2 ${isDark ? 'bg-stone-900 border-stone-700 focus:border-stone-500 text-white' : 'bg-white border-stone-300 focus:border-black'} rounded-lg text-sm focus:outline-none`}
                       onKeyPress={(e) => {
                         if (e.key === 'Enter') {
                           handleEulogyResponse((e.target as HTMLInputElement).value);
@@ -809,7 +913,7 @@ ${template.closingSection}`;
                     />
                     <button
                       onClick={handleSkipQuestion}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-stone-200 text-stone-600 text-sm rounded-lg hover:bg-stone-300 transition-all"
+                      className={`flex items-center gap-1 px-3 py-1.5 ${isDark ? 'bg-stone-700 text-stone-300 hover:bg-stone-600' : 'bg-stone-200 text-stone-600 hover:bg-stone-300'} text-sm rounded-lg transition-all`}
                     >
                       <SkipForward className="w-3 h-3" />
                       Skip for now
@@ -853,7 +957,7 @@ ${template.closingSection}`;
 
         {isThinking && (
           <div className="flex justify-start">
-            <div className="bg-black text-white rounded-2xl p-4 max-w-[80%]">
+            <div className={`${isDark ? 'bg-stone-800 text-white' : 'bg-black text-white'} rounded-2xl p-4 max-w-[80%]`}>
               <div className="flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span className="text-sm opacity-80">Thinking...</span>
@@ -865,8 +969,8 @@ ${template.closingSection}`;
         {messages.length === 0 && (
           <div className="text-center py-12">
             <Sparkles className="w-12 h-12 mx-auto mb-4" />
-            <h3 className="text-lg font-bold mb-2">Your AI Companion</h3>
-            <p className="text-stone-500 text-sm">
+            <h3 className={`text-lg font-bold mb-2 ${isDark ? 'text-white' : 'text-black'}`}>Your AI Companion</h3>
+            <p className={`${isDark ? 'text-stone-400' : 'text-stone-500'} text-sm`}>
               I'm here to help you navigate this journey with compassion and support.
             </p>
           </div>
@@ -874,19 +978,19 @@ ${template.closingSection}`;
 
         {/* Editable Service Outline */}
         {serviceOutline && (
-          <div className="mt-6 p-4 bg-stone-100 border border-stone-200 rounded-xl">
+          <div className={`mt-6 p-4 ${isDark ? 'bg-stone-800 border-stone-700' : 'bg-stone-100 border-stone-200'} rounded-xl`}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold">Service Outline</h3>
+              <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-black'}`}>Service Outline</h3>
               <div className="flex gap-2">
                 <button
                   onClick={() => setIsEditingOutline(!isEditingOutline)}
-                  className="px-3 py-1 bg-black text-white text-sm rounded-lg hover:bg-stone-800 transition-all"
+                  className={`px-3 py-1 ${isDark ? 'bg-stone-700 text-white hover:bg-stone-600' : 'bg-black text-white hover:bg-stone-800'} text-sm rounded-lg transition-all`}
                 >
                   {isEditingOutline ? 'View' : 'Edit'}
                 </button>
                 <button
                   onClick={() => handleCopyToClipboard(editedOutline)}
-                  className="px-3 py-1 bg-stone-200 text-stone-600 text-sm rounded-lg hover:bg-stone-300 transition-all"
+                  className={`px-3 py-1 ${isDark ? 'bg-stone-700 text-stone-300 hover:bg-stone-600' : 'bg-stone-200 text-stone-600 hover:bg-stone-300'} text-sm rounded-lg transition-all`}
                 >
                   Copy
                 </button>
@@ -901,11 +1005,11 @@ ${template.closingSection}`;
                     onServiceOutlineChange(e.target.value);
                   }
                 }}
-                className="w-full h-64 px-3 py-2 bg-white border border-stone-300 rounded-lg text-sm focus:outline-none focus:border-black font-mono"
+                className={`w-full h-64 px-3 py-2 ${isDark ? 'bg-stone-900 border-stone-700 focus:border-stone-500 text-white' : 'bg-white border-stone-300 focus:border-black'} rounded-lg text-sm focus:outline-none font-mono`}
                 placeholder="Edit your service outline..."
               />
             ) : (
-              <pre className="whitespace-pre-wrap text-sm text-stone-700 overflow-x-auto max-h-64 font-mono">
+              <pre className={`whitespace-pre-wrap text-sm ${isDark ? 'text-stone-300' : 'text-stone-700'} overflow-x-auto max-h-64 font-mono`}>
                 {editedOutline}
               </pre>
             )}
@@ -917,12 +1021,12 @@ ${template.closingSection}`;
 
       {/* Input Area */}
       {messages.length > 0 && !isLiveActive && (
-        <div className="border-t border-stone-200 pt-4">
+        <div className={`border-t ${isDark ? 'border-stone-800' : 'border-stone-200'} pt-4`}>
           <div className="flex gap-2">
             {mode === 'VOICE' ? (
               <div className="flex-1 flex flex-col items-center">
                 {isListening && (
-                  <div className="mb-2 text-black text-sm font-bold">
+                  <div className={`mb-2 ${isDark ? 'text-white' : 'text-black'} text-sm font-bold`}>
                     Listening... Speak now
                   </div>
                 )}
@@ -932,20 +1036,20 @@ ${template.closingSection}`;
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="Speak or type your message..."
-                  className="flex-1 bg-white border border-stone-300 rounded-full px-4 py-3 placeholder-stone-500 focus:outline-none focus:border-black"
+                  className={`flex-1 ${isDark ? 'bg-stone-900 border-stone-700 focus:border-stone-500 text-white placeholder-stone-500' : 'bg-white border-stone-300 focus:border-black placeholder-stone-500'} rounded-full px-4 py-3 focus:outline-none`}
                 />
                 <div className="flex gap-2 mt-2">
                   <button
                     onClick={toggleVoiceInput}
                     disabled={isListening}
-                    className="bg-black text-white p-3 rounded-full hover:bg-stone-800 transition-all disabled:opacity-50"
+                    className={`${isDark ? 'bg-stone-700 hover:bg-stone-600' : 'bg-black hover:bg-stone-800'} text-white p-3 rounded-full transition-all disabled:opacity-50`}
                   >
                     {isListening ? <StopCircle className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
                   </button>
                   <button
                     onClick={handleSend}
                     disabled={!input.trim()}
-                    className="bg-black text-white p-3 rounded-full hover:bg-stone-800 transition-all disabled:opacity-50"
+                    className={`${isDark ? 'bg-stone-700 hover:bg-stone-600' : 'bg-black hover:bg-stone-800'} text-white p-3 rounded-full transition-all disabled:opacity-50`}
                   >
                     <Send className="w-5 h-5" />
                   </button>
@@ -959,12 +1063,12 @@ ${template.closingSection}`;
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="Type your message..."
-                  className="flex-1 bg-white border border-stone-300 rounded-full px-4 py-3 placeholder-stone-500 focus:outline-none focus:border-black"
+                  className={`flex-1 ${isDark ? 'bg-stone-900 border-stone-700 focus:border-stone-500 text-white placeholder-stone-500' : 'bg-white border-stone-300 focus:border-black placeholder-stone-500'} rounded-full px-4 py-3 focus:outline-none`}
                 />
                 <button
                   onClick={handleSend}
                   disabled={!input.trim()}
-                  className="bg-black text-white p-3 rounded-full hover:bg-stone-800 transition-all disabled:opacity-50"
+                  className={`${isDark ? 'bg-stone-700 hover:bg-stone-600' : 'bg-black hover:bg-stone-800'} text-white p-3 rounded-full transition-all disabled:opacity-50`}
                 >
                   <Send className="w-5 h-5" />
                 </button>
@@ -973,7 +1077,7 @@ ${template.closingSection}`;
 
             <button
               onClick={() => setMode(mode === 'TEXT' ? 'VOICE' : 'TEXT')}
-              className="bg-stone-200 text-stone-600 p-3 rounded-full hover:bg-stone-300 transition-all"
+              className={`${isDark ? 'bg-stone-800 text-stone-400 hover:bg-stone-700' : 'bg-stone-200 text-stone-600 hover:bg-stone-300'} p-3 rounded-full transition-all`}
             >
               {mode === 'VOICE' ? (
                 <FileText className="w-5 h-5" />
@@ -987,22 +1091,22 @@ ${template.closingSection}`;
 
       {/* Live Session Interface */}
       {isLiveActive && (
-        <div className="border-t border-stone-200 pt-4">
+        <div className={`border-t ${isDark ? 'border-stone-800' : 'border-stone-200'} pt-4`}>
           <div className="text-center">
-            <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center mx-auto mb-2 animate-pulse">
+            <div className={`w-12 h-12 ${isDark ? 'bg-stone-700' : 'bg-black'} rounded-full flex items-center justify-center mx-auto mb-2 animate-pulse`}>
               <MapIcon className="w-6 h-6 text-white" />
             </div>
-            <p className="text-sm font-bold mb-4">Live session active - I'm here for you</p>
+            <p className={`text-sm font-bold mb-4 ${isDark ? 'text-white' : 'text-black'}`}>Live session active - I'm here for you</p>
 
             <div className="text-center">
-              <p className="text-xs text-stone-500 mb-4">How are you feeling right now?</p>
+              <p className={`text-xs ${isDark ? 'text-stone-400' : 'text-stone-500'} mb-4`}>How are you feeling right now?</p>
 
               <div className="flex justify-center gap-2 mb-4">
                 {['Heartbroken', 'Overwhelmed', 'Anxious', 'Grateful', 'Peaceful'].map((emotion) => (
                   <button
                     key={emotion}
                     onClick={() => handleEmotionResponse(emotion)}
-                    className="px-4 py-2 bg-stone-200 text-stone-700 text-sm rounded-full hover:bg-stone-300 font-bold transition-all"
+                    className={`px-4 py-2 ${isDark ? 'bg-stone-800 text-stone-300 hover:bg-stone-700' : 'bg-stone-200 text-stone-700 hover:bg-stone-300'} text-sm rounded-full font-bold transition-all`}
                   >
                     {emotion}
                   </button>
@@ -1013,21 +1117,21 @@ ${template.closingSection}`;
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Share what's on your mind..."
-                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-red-500 mb-4 h-20"
+                className={`w-full ${isDark ? 'bg-stone-900/50 border-stone-700 text-stone-100 placeholder-stone-500 focus:border-stone-500' : 'bg-gray-800/50 border-gray-700 text-gray-100 placeholder-gray-500 focus:border-red-500'} rounded-lg px-4 py-3 focus:outline-none mb-4 h-20`}
               />
 
               <div className="flex gap-2">
                 <button
                   onClick={() => handleLiveSubmit()}
                   disabled={!input.trim()}
-                  className="flex-1 bg-red-500/20 text-red-400 border border-red-500/50 px-8 py-3 rounded-full hover:bg-red-500 hover:text-white transition-all disabled:opacity-50"
+                  className={`flex-1 ${isDark ? 'bg-stone-800/50 text-stone-400 border-stone-700 hover:bg-stone-700' : 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500 hover:text-white'} px-8 py-3 rounded-full transition-all disabled:opacity-50`}
                 >
                   Send
                 </button>
 
                 <button
                   onClick={toggleLiveMode}
-                  className="bg-gray-800/50 text-gray-400 border border-gray-700 px-4 py-3 rounded-full hover:bg-gray-800 hover:text-gray-200 transition-all"
+                  className={`${isDark ? 'bg-stone-800/50 text-stone-400 border-stone-700 hover:bg-stone-800 hover:text-stone-200' : 'bg-gray-800/50 text-gray-400 border-gray-700 hover:bg-gray-800 hover:text-gray-200'} px-4 py-3 rounded-full transition-all`}
                 >
                   <StopCircle className="w-5 h-5" />
                 </button>

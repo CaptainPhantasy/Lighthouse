@@ -1,7 +1,7 @@
 # Lighthouse - Single Source of Truth (SSOT)
 
 **Last Updated**: 2025-12-27
-**Version**: 1.0.0
+**Version**: 2.0.0 - COMPREHENSIVE OVERHAUL PLAN INCLUDED
 
 This document is the technical reference for the Lighthouse application. All architectural decisions, data structures, APIs, and workflows are documented here.
 
@@ -21,6 +21,7 @@ This document is the technical reference for the Lighthouse application. All arc
 10. [Component Reference](#component-reference)
 11. [API Endpoints](#api-endpoints)
 12. [Deployment](#deployment)
+13. [Comprehensive Overhaul Plan](#comprehensive-overhaul-plan)
 
 ---
 
@@ -468,9 +469,318 @@ lighthouse/
 
 ---
 
+## Comprehensive Overhaul Plan
+
+### Executive Summary
+
+This plan addresses the fundamental issues with Lighthouse: broken theme system, lack of true AI-first/voice-first experience, and an onboarding flow that doesn't honor the grieving human experience. The goal is to rebuild this as a compassionate, voice-guided companion that uses Gemini AI to shoulder the cognitive burden during the most difficult time of a user's life.
+
+---
+
+### Part 1: Root Cause Analysis - Theme System
+
+**The Problem:** Two disconnected theming systems
+- **System A**: Tailwind's `dark:` prefix classes (require `<html class="dark">`)
+- **System B**: Custom `ThemeContext` with `isDark` boolean (used in conditional `${isDark ? '...' : '...'}` expressions)
+
+**What Happened:** The ThemeContext IS working correctly and DOES toggle the `dark` class on the HTML element. However, previous "fixes" replaced existing Tailwind `dark:` classes with manual conditionals that read from `useTheme()`. This created a race condition where some components use `dark:` classes (Tailwind native) and others use `${isDark ? ...}` conditionals (custom).
+
+**The Real Fix:** Choose ONE system and apply it consistently. The correct approach is **Tailwind's native `dark:` prefix classes** because:
+- The ThemeContext already manages the HTML `dark` class correctly
+- It's simpler and more maintainable
+- It's what Tailwind is designed for
+
+```tsx
+// REMOVE all manual ThemeContext conditionals like:
+className={`${isDark ? 'bg-stone-800 text-white' : 'bg-white text-black'}`}
+
+// REPLACE with Tailwind dark mode prefixes consistently:
+className="bg-white dark:bg-stone-900 text-black dark:text-white"
+```
+
+**Files to Modify for Theme Fix:**
+- `components/SmartVault.tsx`
+- `components/CompassionateAssistant.tsx`
+- `components/SupportCircleDashboard.tsx`
+- `components/LocalLegalGuide.tsx`
+- `components/ResolutionReport.tsx`
+- `components/TransitionView.tsx`
+- `components/IntakeFlow.tsx`
+- `components/DelegationHub.tsx`
+- `components/Dashboard.tsx`
+- `components/ui/bento-grid.tsx`
+
+---
+
+### Part 2: User-Centered Design Philosophy
+
+**A grieving user who just lost a loved one is experiencing:**
+- Cognitive impairment ("brain fog") - difficulty processing complex information
+- Emotional overwhelm - even small decisions feel impossible
+- Time pressure - many arrangements must be made quickly
+- Financial and legal complexity they've likely never navigated before
+- Social expectations around funeral planning they may not understand
+
+**What They Need:**
+1. A **guide**, not a tool
+2. **Voice-first** interaction - speaking is easier than typing when grieving
+3. **Progressive disclosure** - only show what's necessary right now
+4. **Compassionate AI** that understands context and adapts
+5. **Minimal cognitive load** - the AI should do the heavy thinking
+
+---
+
+### Part 3: Reimagined Onboarding Flow
+
+**Current State Problems:**
+1. Too many abstract questions upfront - "brain fog level 1-5" feels clinical
+2. No voice guidance - user has to read and type everything
+3. No AI presence during onboarding - feels like a form, not a companion
+4. Information asked but not used contextually
+
+**New Onboarding Philosophy: "The AI Companion"**
+
+#### Stage 1: Voice Greeting & Listening (AI-First Entry Point)
+
+Instead of immediately asking questions, the AI should:
+- Speak a greeting: "I'm Lighthouse. I'm here to help you through this difficult time. Whenever you're ready, you can speak to me. I'll listen, and I'll help you understand what needs to be done."
+- Show pulsing microphone (always ready to listen)
+- Allow natural speech input: "My mother passed away this morning at home."
+- Respond compassionately: "I'm so sorry for your loss. Let me help you understand what's happening right now..."
+
+#### Stage 2: Conversational Information Gathering (Guided Conversation)
+
+The AI asks questions **conversationally** following a structured script while feeling natural. Each question is:
+1. **Asked by voice** (text also shown)
+2. **Answered by voice** (typing available as backup)
+3. **Used immediately** to provide relevant guidance
+
+**Required Questions (in conversational script):**
+
+| Question | Why It Matters | AI Action |
+|----------|----------------|-----------|
+| "What was your loved one's name?" | Personalization | Use name throughout |
+| "Where did they pass?" (home/hospital/elsewhere) | Immediate next steps | Provide specific guidance |
+| "Has a doctor or medical professional confirmed the death?" | Legal requirement | Explain pronouncement process |
+| "Are there any religious or cultural practices I should know about?" | Funeral planning | Suggest appropriate options |
+| "Is there family who can help with decisions?" | Support network | Offer delegation features |
+
+**Cognitive State Inference (NOT asked explicitly):**
+- Monitor response latency
+- Track voice pattern hesitations
+- Observe task completion patterns
+- Note if user asks for clarification repeatedly
+- Detect signs of overwhelm (repeated same questions, long pauses)
+- Automatically simplify UI when indicators suggest high cognitive load
+
+#### Stage 3: Immediate Action Plan
+
+Before entering the main app, the AI should provide:
+```
+"Based on what you've shared, here's what needs attention right now:
+
+[Most Urgent] - Death pronouncement and documentation
+[Within 24 hours] - Contact funeral home
+[This Week] - Gather important documents
+
+I'll help you with each of these. You can talk to me anytime by tapping
+the microphone at the bottom. I'll be here."
+```
+
+---
+
+### Part 4: AI-First / Voice-First Implementation
+
+**What "AI-First" Actually Means:**
+- **Current State:** AI is used as a feature (chat, document scan)
+- **AI-First State:** AI is the primary interface
+
+**Concrete Changes:**
+
+1. **Persistent AI Presence**
+   - AI avatar always visible (subtle, non-intrusive)
+   - Voice greeting on app open: "I'm here. What do you need?"
+   - Proactive check-ins: "It's been a few hours. How are you doing?"
+
+2. **Voice-First Navigation**
+   - "Show me what needs to be done today" → Shows prioritized tasks
+   - "Help me find funeral homes near me" → Opens Transport Navigator
+   - "Read me the task about insurance" → AI reads and explains
+   - "I'm feeling overwhelmed" → AI simplifies view, shows breathing exercise
+
+3. **Gemini AI as the "Brain"**
+   - **Document Understanding**: Scan ANY document, AI explains what it is and what to do
+   - **Task Prioritization**: AI dynamically adjusts task priority based on user's situation
+   - **Eulogy Assistant**: AI gathers memories through conversation, drafts service outline
+   - **Legal Guide**: AI explains probate/death certificate process in plain language
+   - **Emotional Support**: AI recognizes distress, provides grounding techniques
+
+---
+
+### Part 5: Technical Implementation Plan
+
+#### Phase 1: Fix Theme System (Week 1, 2-3 days)
+- Replace all `${isDark ? ...}` with `dark:` prefixes
+- Test thoroughly
+- Verify toggle works everywhere
+
+#### Phase 2: Redesign Onboarding as AI-First Experience (Week 2, 5 days)
+
+**New File Structure:**
+```
+components/onboarding/
+├── VoiceIntro.tsx          # Initial AI greeting, always-listening mic
+├── ConversationFlow.tsx   # AI-driven conversational question asking
+├── ImmediateGuidance.tsx  # AI's action plan based on situation
+└── OnboardingComplete.tsx  # Handoff to main app
+```
+
+**Key Implementation:**
+- **VoiceIntro.tsx**: Pulsing microphone, auto-starts listening, AI speaks greeting
+- **ConversationFlow.tsx**: Uses Gemini `connectLiveSession` for real-time voice conversation
+- Information extracted from conversation stored in UserState, no re-asking
+
+#### Phase 3: Persistent AI Companion (Week 3, 5 days)
+
+**New Component: `AIAvatar.tsx`**
+- Subtle visual presence (not intrusive)
+- Shows "thinking" when AI is processing
+- Pulsing gently when listening
+- Click to talk (opens voice input)
+
+**Voice Command System:**
+```typescript
+// Commands to support:
+"Show me my tasks" → Opens Plan tab
+"Help me with {document type}" → Opens Smart Vault
+"I need to delegate {task}" → Opens Delegation Hub
+"Read me the checklist" → AI reads current priorities
+"I'm overwhelmed" → Simplifies UI, shows breathing
+"What do I do about {situation}" → AI provides specific guidance
+```
+
+#### Phase 4: AI-Powered Task Intelligence (Week 3-4)
+
+**Enhance `geminiService.ts` with:**
+```typescript
+// Context-Aware Task Prioritization
+export async function getPrioritizedGuidance(userState: UserState) {
+  // AI analyzes entire situation and returns:
+  // - What's most urgent right now
+  // - What can wait
+  // - What the user is forgetting
+  // - What they don't know they need
+}
+
+// Proactive Notifications
+export async function checkForProactiveGuidance(userState: UserState) {
+  // AI checks if user is missing something important
+  // Returns gentle reminder if needed
+}
+
+// Memory Gathering Service
+export async function gatherMemories(conversation: string[]) {
+  // AI extracts memories from conversation
+  // Organizes by theme
+  // Suggests eulogy content
+}
+```
+
+#### Phase 5: Polish & Integration (Week 4, 5 days)
+- End-to-end testing
+- Compassionate language review
+- Performance optimization
+- Accessibility audit
+
+---
+
+### Part 6: Complete Feature Mapping
+
+| Category | User Need | AI Solution |
+|----------|-----------|-------------|
+| **Immediate** | Death pronouncement | AI explains who to call, what forms needed |
+| **Immediate** | Body transport | AI finds funeral homes, explains process |
+| **Immediate** | Death certificates | AI provides county-specific info |
+| **This Week** | Notify people | AI drafts notifications, tracks contacts |
+| **This Week** | Funeral planning | AI gathers preferences, suggests options |
+| **This Week** | Document gathering | AI scans & explains, creates checklist |
+| **Ongoing** | Financial tasks | AI identifies accounts, explains claims |
+| **Ongoing** | Legal/Probate | AI simplifies process, finds local resources |
+| **Emotional** | Memories/Eulogy | AI gathers stories, drafts service |
+| **Social** | Support coordination | AI helps delegate tasks to family |
+
+---
+
+### Part 7: Success Criteria
+
+#### Theme System
+- [ ] All components use Tailwind `dark:` prefix consistently
+- [ ] Theme toggle works instantly across entire app
+- [ ] No hardcoded colors without dark variants
+- [ ] Tested in both light and dark modes
+
+#### AI-First Experience
+- [ ] AI speaks on first open
+- [ ] Voice is primary input method
+- [ ] AI proactively offers help
+- [ ] Natural conversation, not form-filling
+
+#### Onboarding
+- [ ] No redundant questions
+- [ ] Information collected once, used everywhere
+- [ ] User understands what to do immediately
+- [ ] Feels like a companion, not a tool
+
+#### Compassionate UX
+- [ ] Acknowledges grief throughout
+- [ ] Simplifies when overwhelmed
+- [ ] Never judgmental
+- [ ] Respects user's pace
+
+---
+
+### Part 8: Files Requiring Major Changes
+
+**Delete/Replace:**
+- `components/IntakeFlow.tsx` → Replace with new onboarding flow
+- `components/TransitionView.tsx` → Integrate into new onboarding
+
+**Major Enhancements:**
+- `components/CompassionateAssistant.tsx` → Make it the primary interface
+- `services/geminiService.ts` → Add proactive AI features
+- `components/Dashboard.tsx` → Add AI avatar, voice trigger
+
+**Theme Fixes:**
+- All component files (see Phase 1 list above)
+
+---
+
+### The Vision
+
+Lighthouse should feel like **a knowledgeable friend sitting beside you**, someone who:
+- Understands what you're going through
+- Knows what needs to be done
+- Does the heavy thinking for you
+- Speaks when spoken to
+- Never judges, never rushes
+
+The technology (Gemini AI, voice, theme system) should be **invisible**. What the user experiences is **support**.
+
+---
+
 ## Change Log
 
-### Version 1.0.0 (2025-12-27)
+### Version 2.0.0 (2025-12-27)
+
+**Added:**
+- Comprehensive Overhaul Plan section documenting:
+  - Theme system root cause analysis and fix strategy
+  - User-centered design philosophy for grieving users
+  - Reimagined AI-first, voice-first onboarding flow
+  - Technical implementation plan across 5 phases
+  - Complete feature mapping and success criteria
+
+**Version 1.0.0 (2025-12-27)**
 
 **Added**:
 - USER_INTRO step to intake flow

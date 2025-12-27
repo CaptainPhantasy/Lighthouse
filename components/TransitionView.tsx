@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { UserState } from '../types';
-import { CheckCircle, Heart, MapPin, AlertTriangle, Sparkles, ArrowRight, Feather, Volume1, VolumeX, RotateCcw } from 'lucide-react';
+import { CheckCircle, Heart, MapPin, AlertTriangle, Sparkles, ArrowRight, Feather, Volume1, VolumeX, RotateCcw, Play, Headphones } from 'lucide-react';
 import { AuroraBackground } from './ui/aurora-background';
 import ColourfulText from './ui/colourful-text';
 import { generateSpeech } from '../services/geminiService';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface TransitionViewProps {
   userState: UserState;
@@ -12,11 +13,15 @@ interface TransitionViewProps {
 }
 
 const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }) => {
+  const { isDark } = useTheme();
+
   const [showContinue, setShowContinue] = useState(false);
   const [showPriorityCard, setShowPriorityCard] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const [showAudioButton, setShowAudioButton] = useState(false);
+  const [audioGenerated, setAudioGenerated] = useState(false);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -64,48 +69,87 @@ const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }
         const buffer = await generateSpeech(welcomeMessage);
         if (buffer) {
           audioBufferRef.current = buffer;
+          setAudioGenerated(true);
 
           // Only auto-play if user has interacted and not muted
           if (hasUserInteracted && !isMuted) {
-            playAudio(buffer);
+            const played = await playAudio(buffer);
+            if (!played) {
+              // Auto-play was blocked, show the button
+              setShowAudioButton(true);
+            }
+          } else {
+            // No interaction yet, show the button
+            setShowAudioButton(true);
           }
         }
       } catch (error) {
         console.error('Error generating speech:', error);
+        // Show the button as a fallback
+        setShowAudioButton(true);
       }
     };
 
     generateAndPlaySpeech();
   }, [userState.name, hasUserInteracted]);
 
-  const playAudio = (buffer: AudioBuffer) => {
+  const playAudio = async (buffer: AudioBuffer): Promise<boolean> => {
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
 
-    // Stop any currently playing audio
-    if (audioSourceRef.current) {
-      audioSourceRef.current.stop();
-      audioSourceRef.current.disconnect();
+    // Try to resume the audio context if it's suspended
+    if (audioContextRef.current.state === 'suspended') {
+      try {
+        await audioContextRef.current.resume();
+      } catch (e) {
+        console.error('Failed to resume audio context:', e);
+        return false;
+      }
     }
 
-    const source = audioContextRef.current.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioContextRef.current.destination);
+    // Stop any currently playing audio
+    if (audioSourceRef.current) {
+      try {
+        audioSourceRef.current.stop();
+        audioSourceRef.current.disconnect();
+      } catch (e) {
+        // Audio may have already stopped
+      }
+    }
 
-    source.onended = () => {
-      setAudioPlaying(false);
-      audioSourceRef.current = null;
-    };
+    try {
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioContextRef.current.destination);
 
-    source.start(0);
-    audioSourceRef.current = source;
-    setAudioPlaying(true);
+      source.onended = () => {
+        setAudioPlaying(false);
+        audioSourceRef.current = null;
+      };
+
+      source.start(0);
+      audioSourceRef.current = source;
+      setAudioPlaying(true);
+      return true;
+    } catch (e) {
+      console.error('Failed to play audio:', e);
+      return false;
+    }
   };
 
-  const handleReplay = () => {
+  const handleReplay = async () => {
     if (audioBufferRef.current) {
-      playAudio(audioBufferRef.current);
+      await playAudio(audioBufferRef.current);
+    }
+  };
+
+  const handleListenToMessage = async () => {
+    if (audioBufferRef.current) {
+      const played = await playAudio(audioBufferRef.current);
+      if (played) {
+        setShowAudioButton(false);
+      }
     }
   };
 
@@ -229,59 +273,79 @@ const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }
 
               {/* Audio Controls */}
               <div className="flex items-center justify-center gap-2">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={toggleMute}
-                  className="p-2 rounded-full bg-stone-100 hover:bg-stone-200 transition-colors border border-stone-200"
-                  aria-label={isMuted ? 'Unmute' : 'Mute'}
-                >
-                  {isMuted ? (
-                    <VolumeX className="w-4 h-4 text-stone-600" />
-                  ) : (
-                    <Volume1 className="w-4 h-4 text-stone-600" />
-                  )}
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleReplay}
-                  disabled={!audioBufferRef.current}
-                  className="p-2 rounded-full bg-stone-100 hover:bg-stone-200 transition-colors border border-stone-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                  aria-label="Replay message"
-                >
-                  <RotateCcw className="w-4 h-4 text-stone-600" />
-                </motion.button>
-                {audioPlaying && (
-                  <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="text-xs text-stone-500 flex items-center gap-1"
+                {/* Fallback "Listen to message" button for autoplay blocking */}
+                {showAudioButton && audioGenerated && (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleListenToMessage}
+                    className={`flex items-center gap-2 px-5 py-3 ${isDark ? 'bg-stone-700 hover:bg-stone-600' : 'bg-black hover:bg-stone-800'} text-white rounded-full transition-colors shadow-lg`}
                   >
-                    <span className="relative flex h-2 w-2">
+                    <Headphones className="w-5 h-5" />
+                    <span className="font-medium">Listen to a message</span>
+                  </motion.button>
+                )}
+
+                {/* Standard audio controls when audio is playing or was played */}
+                {!showAudioButton && (
+                  <>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={toggleMute}
+                      className="p-2 rounded-full bg-stone-100 hover:bg-stone-200 transition-colors border border-stone-200"
+                      aria-label={isMuted ? 'Unmute' : 'Mute'}
+                    >
+                      {isMuted ? (
+                        <VolumeX className="w-4 h-4 text-black" />
+                      ) : (
+                        <Volume1 className="w-4 h-4 text-black" />
+                      )}
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleReplay}
+                      disabled={!audioBufferRef.current}
+                      className="p-2 rounded-full bg-stone-100 hover:bg-stone-200 transition-colors border border-stone-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                      aria-label="Replay message"
+                    >
+                      <RotateCcw className="w-4 h-4 text-black" />
+                    </motion.button>
+                    {audioPlaying && (
                       <motion.span
-                        animate={{
-                          scale: [1, 1.5, 1],
-                          opacity: [0.5, 1, 0.5],
-                        }}
-                        transition={{
-                          duration: 1.5,
-                          repeat: Infinity,
-                          ease: 'easeInOut',
-                        }}
-                        className="absolute inline-flex h-full w-full rounded-full bg-stone-400"
-                      />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-stone-500" />
-                    </span>
-                    Playing
-                  </motion.span>
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="text-xs text-stone-700 flex items-center gap-1"
+                      >
+                        <span className="relative flex h-2 w-2">
+                          <motion.span
+                            animate={{
+                              scale: [1, 1.5, 1],
+                              opacity: [0.5, 1, 0.5],
+                            }}
+                            transition={{
+                              duration: 1.5,
+                              repeat: Infinity,
+                              ease: 'easeInOut',
+                            }}
+                            className="absolute inline-flex h-full w-full rounded-full bg-stone-400"
+                          />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-stone-500" />
+                        </span>
+                        Playing
+                      </motion.span>
+                    )}
+                  </>
                 )}
               </div>
 
-              <h1 className="text-3xl md:text-4xl font-light text-slate-800 leading-tight">
-                Take a breath, <span className="font-semibold text-black">{userState.name || 'friend'}</span>.
+              <h1 className={`text-3xl md:text-4xl font-light leading-tight ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                Take a breath, <span className={`font-semibold ${isDark ? 'text-white' : 'text-black'}`}>{userState.name || 'friend'}</span>.
               </h1>
-              <p className="text-lg text-slate-500 max-w-md mx-auto leading-relaxed">
+              <p className={`text-lg max-w-md mx-auto leading-relaxed ${isDark ? 'text-stone-400' : 'text-slate-500'}`}>
                 We've heard everything you shared. You don't have to carry this alone anymore.
               </p>
             </motion.div>
@@ -305,11 +369,11 @@ const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }
                     </div>
                   </motion.div>
 
-                  <p className="text-sm text-slate-500 uppercase tracking-wide mb-2">Your Focus Right Now</p>
-                  <p className="text-2xl font-semibold text-slate-800 mb-3">
+                  <p className={`text-sm uppercase tracking-wide mb-2 ${isDark ? 'text-stone-400' : 'text-slate-500'}`}>Your Focus Right Now</p>
+                  <p className={`text-2xl font-semibold mb-3 ${isDark ? 'text-white' : 'text-slate-800'}`}>
                     {priority.title}
                   </p>
-                  <p className="text-slate-600 leading-relaxed">
+                  <p className={isDark ? 'text-stone-400 leading-relaxed' : 'text-slate-600 leading-relaxed'}>
                     {priority.description}
                   </p>
 
@@ -338,7 +402,7 @@ const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-stone-200 flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-stone-600" />
+                    <Sparkles className="w-5 h-5 text-black" />
                   </div>
                   <p className="text-stone-700 text-sm text-left">
                     We've simplified everything to help you through this, one moment at a time.
