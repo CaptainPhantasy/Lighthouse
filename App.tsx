@@ -3,20 +3,44 @@ import IntakeFlow from './components/IntakeFlow';
 import TransitionView from './components/TransitionView';
 import Dashboard from './components/Dashboard';
 import SplashScreen from './components/SplashScreen';
+import VolunteerPage from './components/VolunteerPage';
 import { AppView, UserState, DocumentScan, Task, ServicePreference } from './types';
 import { INITIAL_USER_STATE } from './constants';
 import { isEncrypted, decryptObject, encryptObject, sanitizeData } from './utils/encryption';
 import { ENCRYPTION_PASSWORD } from './constants';
+import { ThemeProvider } from './contexts/ThemeContext';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [splashScreenVisible, setSplashScreenVisible] = useState(true);
   const [view, setView] = useState<AppView>(AppView.INTAKE);
   const [userState, setUserState] = useState<UserState>(INITIAL_USER_STATE);
   const [documentScans, setDocumentScans] = useState<DocumentScan[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [volunteerRequestId, setVolunteerRequestId] = useState<string | null>(null);
+
+  // Check for Volunteer URL on mount
+  useEffect(() => {
+    const path = window.location.pathname;
+    // matches /volunteer/[uuid]
+    if (path.startsWith('/volunteer/')) {
+      const requestId = path.split('/volunteer/')[1];
+      if (requestId) {
+        setVolunteerRequestId(requestId);
+        setView(AppView.VOLUNTEER);
+        setSplashScreenVisible(false); // Skip splash for volunteers
+        return;
+      }
+    }
+  }, []);
 
   // Load state from localStorage on mount
   useEffect(() => {
+    // 1. IMMEDIATE CHECK: If this is a volunteer link, STOP loading user data.
+    // Let the Volunteer Hijack take over - don't restore saved state.
+    if (window.location.pathname.startsWith('/volunteer/')) {
+      return;
+    }
+
     // Hide splash screen after 7 seconds
     const splashTimer = setTimeout(() => {
       setSplashScreenVisible(false);
@@ -199,6 +223,8 @@ const App: React.FC = () => {
               userState={userState}
               onComplete={handleTransitionComplete}
             />
+          ) : view === AppView.VOLUNTEER ? (
+            <VolunteerPage requestId={volunteerRequestId} />
           ) : (
             <Dashboard
               userState={userState}
@@ -213,6 +239,14 @@ const App: React.FC = () => {
         </>
       )}
     </>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 };
 

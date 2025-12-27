@@ -80,3 +80,16 @@ npm run preview      # Preview production build
 - All AI API calls go through `geminiService.ts`
 - User's brain fog level (1-5) affects UI complexity and task prioritization
 - The app follows a progressive disclosure pattern to reduce cognitive load
+
+## Design Guidelines
+
+### Color Scheme
+- **Light mode**: white backgrounds, black text, stone grays for secondary elements
+- **Dark mode**: black backgrounds, white text, stone grays for secondary elements
+- **NO purple, pink, indigo, violet, or colorful gradients** anywhere in the application
+- All buttons, accents, and highlights must use black/white/stone colors only
+
+### Working with Images
+- **ALWAYS use the Vision MCP** when the user attaches or shares an image
+- Use vision tools first to understand what the user is showing before making changes
+- Never assume what an image contains - analyze it with vision tools first

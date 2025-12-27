@@ -25,16 +25,27 @@ export const TEXTS = {
     hospital: "Hospital / Hospice",
     out_of_state: "Out of State / Abroad",
   },
+  // Acknowledgment responses for each location
+  location_acknowledgments: {
+    home: "We're so sorry. We'll help you coordinate the pronouncement and transport immediately.",
+    hospital: "We're so sorry. The hospital staff will guide you through the next steps. We're here to help with what comes after.",
+    out_of_state: "We're so sorry. This is especially difficult. We'll guide you through the transport process step by step.",
+  },
   legal_question: "Has a medical professional or authority pronounced the death?",
   identity_question: "What was their full legal name?",
   veteran_question: "Did they serve in the military?",
   fog_question: "On a scale of 1-5, how much 'brain fog' are you feeling right now?",
   fog_explainer: "We will hide non-urgent tasks based on your answer to help you focus.",
+  fog_minimal_message: "Taking it one moment at a time. We've simplified everything for you.",
   dashboard_tab_vault: "Smart Vault",
   dashboard_tab_tasks: "Restoration Plan",
   dashboard_tab_assist: "Compassionate Guide",
   delegate_action: "Ask Support Circle",
   out_of_state_warning: "Since your loved one is out of state, we have prioritized the Body Transport Navigator module for you.",
+  // Legacy hand-off messages
+  legacy_title: "The Legacy Hand-off",
+  legacy_subtitle: "We've handled the business of death. Now, let's preserve the beauty of life.",
+  legacy_export: "Create a beautiful digital memorial page with the obituary, service outline, and memories.",
 };
 
 export const MOCK_TASKS: Task[] = [

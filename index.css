@@ -5,6 +5,63 @@
   padding: 0;
 }
 
+/* Theme variables */
+:root {
+  --bg-primary: 240 10% 96%; /* stone-100 */
+  --bg-secondary: 0 0% 100%; /* white */
+  --bg-tertiary: 210 20% 90%; /* stone-200 */
+  --bg-muted: 215 25% 85%; /* stone-100 */
+  --bg-card: 0 0% 100%; /* white */
+  --bg-accent: 0 0% 0%; /* black */
+
+  --text-primary: 0 0% 0%; /* black */
+  --text-secondary: 215 25% 27%; /* stone-600 */
+  --text-muted: 215 20% 40%; /* stone-500 */
+  --text-inverted: 0 0% 100%; /* white */
+
+  --border: 215 20% 85%; /* stone-200 */
+  --border-hover: 210 20% 75%; /* stone-300 */
+
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+}
+
+.dark {
+  --bg-primary: 0 0% 0%; /* black */
+  --bg-secondary: 0 0% 7%; /* slightly lighter black */
+  --bg-tertiary: 0 0% 15%; /* dark gray */
+  --bg-muted: 0 0% 15%; /* dark gray */
+  --bg-card: 0 0% 7%; /* dark card */
+  --bg-accent: 210 20% 90%; /* stone-200 */
+
+  --text-primary: 0 0% 100%; /* white */
+  --text-secondary: 215 20% 85%; /* stone-300 */
+  --text-muted: 215 15% 70%; /* stone-400 */
+  --text-inverted: 0 0% 0%; /* black */
+
+  --border: 0 0% 20%; /* dark gray */
+  --border-hover: 0 0% 30%; /* lighter gray */
+}
+
+/* Theme class utilities */
+.bg-theme-primary { background-color: hsl(var(--bg-primary)); }
+.bg-theme-secondary { background-color: hsl(var(--bg-secondary)); }
+.bg-theme-tertiary { background-color: hsl(var(--bg-tertiary)); }
+.bg-theme-muted { background-color: hsl(var(--bg-muted)); }
+.bg-theme-card { background-color: hsl(var(--bg-card)); }
+.bg-theme-accent { background-color: hsl(var(--bg-accent)); }
+
+.text-theme-primary { color: hsl(var(--text-primary)); }
+.text-theme-secondary { color: hsl(var(--text-secondary)); }
+.text-theme-muted { color: hsl(var(--text-muted)); }
+.text-theme-inverted { color: hsl(var(--text-inverted)); }
+
+.border-theme { border-color: hsl(var(--border)); }
+.border-theme-tertiary { border-color: hsl(var(--border-hover)); }
+
 /* Custom scrollbar for chat */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
@@ -27,6 +84,80 @@
 
 .animate-pulse {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Fade in animation */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Fade in up animation */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s ease-out;
+}
+
+/* Fade in down animation */
+@keyframes fade-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-down {
+  animation: fade-in-down 0.4s ease-out;
+}
+
+/* Bounce animation */
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-25%);
+  }
+}
+
+.animate-bounce {
+  animation: bounce 1s infinite;
+}
+
+/* Spin animation */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
 }
 
 /* Smooth transitions */

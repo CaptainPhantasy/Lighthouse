@@ -136,22 +136,22 @@ const SupportCircleDashboard: React.FC<SupportCircleDashboardProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen bg-stone-100 p-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur px-4 py-2 rounded-full mb-4">
-            <HeartHandshake className="w-5 h-5 text-pink-500" />
-            <h1 className="text-xl font-semibold text-gray-800">Support Circle</h1>
+            <HeartHandshake className="w-5 h-5 text-black" />
+            <h1 className="text-xl font-semibold text-black">Support Circle</h1>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          <h2 className="text-2xl font-bold text-black mb-2">
             Supporting {userState.deceasedName || 'Your Loved One'}
           </h2>
-          <p className="text-gray-600">
+          <p className="text-stone-600">
             Friends and family have come together to help during this time
           </p>
-          <div className="mt-4 bg-purple-50 border border-purple-200 rounded-lg p-4 inline-block">
-            <p className="text-sm text-purple-800">
+          <div className="mt-4 bg-stone-100 border border-stone-200 rounded-lg p-4 inline-block">
+            <p className="text-sm text-stone-800">
               <strong>Note:</strong> To generate task delegation links for specific funeral tasks, go to the <strong>Plan</strong> tab and use the "Ask Support Circle" button on each task.
             </p>
           </div>
@@ -160,28 +160,28 @@ const SupportCircleDashboard: React.FC<SupportCircleDashboardProps> = ({
         {/* Care Calendar Section */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
           <div className="flex items-center gap-2 mb-4">
-            <Calendar className="w-5 h-5 text-blue-500" />
-            <h3 className="text-lg font-semibold text-gray-800">Care Calendar</h3>
+            <Calendar className="w-5 h-5 text-black" />
+            <h3 className="text-lg font-semibold text-black">Care Calendar</h3>
           </div>
 
           <div className="grid gap-4">
             {availableTasks.map(task => (
-              <div key={task.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+              <div key={task.id} className="border border-stone-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <h4 className="font-medium text-gray-800">{task.title}</h4>
+                    <h4 className="font-medium text-black">{task.title}</h4>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
+                      <span className="text-xs px-2 py-1 bg-stone-100 text-stone-600 rounded-full">
                         {task.category}
                       </span>
-                      <span className="text-sm text-gray-500">
+                      <span className="text-sm text-stone-500">
                         {new Date(task.date).toLocaleDateString()}
                       </span>
                     </div>
                   </div>
                   <button
                     onClick={() => handleAssignTask(task.id)}
-                    className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors text-sm"
+                    className="bg-black text-white px-4 py-2 rounded-lg hover:bg-stone-800 transition-colors text-sm"
                   >
                     I'll Help
                   </button>
@@ -193,16 +193,16 @@ const SupportCircleDashboard: React.FC<SupportCircleDashboardProps> = ({
 
         {/* Logistics Tasks Section */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Logistics Tasks</h3>
+          <h3 className="text-lg font-semibold text-black mb-4">Logistics Tasks</h3>
           {delegatedTasks.length > 0 ? (
             <div className="space-y-3">
               {delegatedTasks.map(task => (
-                <div key={task.id} className="border border-gray-200 rounded-lg p-4">
+                <div key={task.id} className="border border-stone-200 rounded-lg p-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <h4 className="font-medium text-gray-800">{task.title}</h4>
-                      <p className="text-sm text-gray-600 mt-1">{task.description}</p>
-                      <span className="text-xs px-2 py-1 bg-green-100 text-green-600 rounded-full mt-2 inline-block">
+                      <h4 className="font-medium text-black">{task.title}</h4>
+                      <p className="text-sm text-stone-600 mt-1">{task.description}</p>
+                      <span className="text-xs px-2 py-1 bg-stone-200 text-stone-600 rounded-full mt-2 inline-block">
                         Delegated
                       </span>
                     </div>
@@ -211,7 +211,7 @@ const SupportCircleDashboard: React.FC<SupportCircleDashboardProps> = ({
               ))}
             </div>
           ) : (
-            <p className="text-gray-500 text-center py-8">
+            <p className="text-stone-500 text-center py-8">
               No logistics tasks have been delegated yet
             </p>
           )}
@@ -220,25 +220,25 @@ const SupportCircleDashboard: React.FC<SupportCircleDashboardProps> = ({
         {/* Messages of Support */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
           <div className="flex items-center gap-2 mb-4">
-            <MessageSquare className="w-5 h-5 text-pink-500" />
-            <h3 className="text-lg font-semibold text-gray-800">Messages of Support</h3>
+            <MessageSquare className="w-5 h-5 text-black" />
+            <h3 className="text-lg font-semibold text-black">Messages of Support</h3>
           </div>
 
           <div className="space-y-4 mb-4 max-h-64 overflow-y-auto">
             {messages.map(message => (
-              <div key={message.id} className="border-b border-gray-100 pb-4 last:border-b-0">
+              <div key={message.id} className="border-b border-stone-100 pb-4 last:border-b-0">
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                  <div className="w-8 h-8 bg-stone-800 rounded-full flex items-center justify-center text-white text-sm font-medium">
                     {message.author.charAt(0)}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-baseline gap-2">
-                      <h4 className="font-medium text-gray-800">{message.author}</h4>
-                      <span className="text-xs text-gray-500">
+                      <h4 className="font-medium text-black">{message.author}</h4>
+                      <span className="text-xs text-stone-500">
                         {new Date(message.timestamp).toLocaleDateString()}
                       </span>
                     </div>
-                    <p className="text-gray-600 mt-1">{message.content}</p>
+                    <p className="text-stone-600 mt-1">{message.content}</p>
                   </div>
                 </div>
               </div>
@@ -252,13 +252,13 @@ const SupportCircleDashboard: React.FC<SupportCircleDashboardProps> = ({
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               placeholder="Leave a message of support..."
-              className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 border border-stone-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-black"
               onKeyPress={(e) => e.key === 'Enter' && handleAddMessage()}
             />
             <button
               onClick={handleAddMessage}
               disabled={!newMessage.trim()}
-              className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+              className="bg-black text-white px-6 py-2 rounded-lg hover:bg-stone-800 transition-colors disabled:opacity-50"
             >
               Send
             </button>
@@ -270,14 +270,14 @@ const SupportCircleDashboard: React.FC<SupportCircleDashboardProps> = ({
           <div className="flex gap-4">
             <button
               onClick={handlePlayEulogy}
-              className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all flex items-center justify-center gap-2"
+              className="flex-1 bg-black text-white py-3 rounded-lg hover:bg-stone-800 transition-colors flex items-center justify-center gap-2"
             >
               <MessageSquare className="w-5 h-5" />
               Listen to Eulogy
             </button>
             <button
               onClick={handleDownloadSummary}
-              className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+              className="flex-1 bg-stone-100 text-stone-700 py-3 rounded-lg hover:bg-stone-200 transition-colors flex items-center justify-center gap-2"
             >
               <Download className="w-5 h-5" />
               Download Summary

@@ -2,6 +2,7 @@ export enum AppView {
   INTAKE = 'INTAKE',
   TRANSITION = 'TRANSITION',
   DASHBOARD = 'DASHBOARD',
+  VOLUNTEER = 'VOLUNTEER',
 }
 
 export enum IntakeStep {

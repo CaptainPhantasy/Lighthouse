@@ -71,10 +71,10 @@ const LocalLegalGuide: React.FC<LocalLegalGuideProps> = ({ userState }) => {
 
   if (probateInfo.isLoading) {
     return (
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
+      <div className="bg-stone-100 border border-stone-200 rounded-xl p-6">
         <div className="flex items-center gap-3">
-          <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
-          <p className="text-sm text-blue-800">Loading local legal requirements...</p>
+          <Loader2 className="w-5 h-5 text-black animate-spin" />
+          <p className="text-sm text-black">Loading local legal requirements...</p>
         </div>
       </div>
     );
@@ -82,15 +82,15 @@ const LocalLegalGuide: React.FC<LocalLegalGuideProps> = ({ userState }) => {
 
   if (probateInfo.error) {
     return (
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
+      <div className="bg-stone-100 border border-stone-200 rounded-xl p-6">
         <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <AlertTriangle className="w-5 h-5 text-black mt-0.5 flex-shrink-0" />
           <div>
-            <h3 className="font-medium text-amber-800 mb-1">Local Legal Guide</h3>
-            <p className="text-sm text-amber-700 mb-3">
+            <h3 className="font-medium text-black mb-1">Local Legal Guide</h3>
+            <p className="text-sm text-stone-700 mb-3">
               {probateInfo.error}
             </p>
-            <div className="flex items-center gap-2 text-xs text-amber-600">
+            <div className="flex items-center gap-2 text-xs text-stone-600">
               <MapPin className="w-3 h-3" />
               <span>For {userState.deceasedLocation}</span>
             </div>
@@ -101,17 +101,17 @@ const LocalLegalGuide: React.FC<LocalLegalGuideProps> = ({ userState }) => {
   }
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 shadow-sm">
+    <div className="bg-white border border-stone-200 rounded-xl p-6 shadow-sm">
       <div className="flex items-start gap-3 mb-4">
-        <div className="bg-blue-100 p-2 rounded-lg">
-          <MapPin className="w-5 h-5 text-blue-600" />
+        <div className="bg-stone-100 p-2 rounded-lg">
+          <MapPin className="w-5 h-5 text-black" />
         </div>
         <div className="flex-1">
-          <h3 className="font-semibold text-blue-900 mb-1">Local Legal Guide</h3>
-          <div className="flex items-center gap-2 text-xs text-blue-700">
+          <h3 className="font-semibold text-black mb-1">Local Legal Guide</h3>
+          <div className="flex items-center gap-2 text-xs text-stone-600">
             <span>For {probateInfo.location}</span>
             {userState.brainFogLevel <= 2 && (
-              <span className="bg-blue-200 text-blue-800 px-2 py-1 rounded-full">
+              <span className="bg-stone-200 text-black px-2 py-1 rounded-full">
                 Detailed View
               </span>
             )}
@@ -123,10 +123,10 @@ const LocalLegalGuide: React.FC<LocalLegalGuideProps> = ({ userState }) => {
         {/* Requirements */}
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <FileText className="w-4 h-4 text-blue-600" />
-            <h4 className="font-medium text-blue-800 text-sm">Probate Requirements</h4>
+            <FileText className="w-4 h-4 text-black" />
+            <h4 className="font-medium text-black text-sm">Probate Requirements</h4>
           </div>
-          <p className="text-sm text-blue-700 leading-relaxed">
+          <p className="text-sm text-stone-700 leading-relaxed">
             {probateInfo.requirements}
           </p>
         </div>
@@ -134,10 +134,10 @@ const LocalLegalGuide: React.FC<LocalLegalGuideProps> = ({ userState }) => {
         {/* Timeframe */}
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <Clock className="w-4 h-4 text-blue-600" />
-            <h4 className="font-medium text-blue-800 text-sm">Expected Timeline</h4>
+            <Clock className="w-4 h-4 text-black" />
+            <h4 className="font-medium text-black text-sm">Expected Timeline</h4>
           </div>
-          <p className="text-sm text-blue-700">
+          <p className="text-sm text-stone-700">
             {probateInfo.timeframe}
           </p>
         </div>
@@ -145,13 +145,13 @@ const LocalLegalGuide: React.FC<LocalLegalGuideProps> = ({ userState }) => {
         {/* Required Documents */}
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <CheckCircle className="w-4 h-4 text-blue-600" />
-            <h4 className="font-medium text-blue-800 text-sm">Typical Required Documents</h4>
+            <CheckCircle className="w-4 h-4 text-black" />
+            <h4 className="font-medium text-black text-sm">Typical Required Documents</h4>
           </div>
           <ul className="space-y-1">
             {probateInfo.documents.map((doc, index) => (
-              <li key={index} className="text-sm text-blue-700 flex items-start gap-2">
-                <span className="text-blue-500 mt-1">•</span>
+              <li key={index} className="text-sm text-stone-700 flex items-start gap-2">
+                <span className="text-stone-500 mt-1">•</span>
                 <span>{doc}</span>
               </li>
             ))}
@@ -160,8 +160,8 @@ const LocalLegalGuide: React.FC<LocalLegalGuideProps> = ({ userState }) => {
 
         {/* Additional Notes */}
         {probateInfo.notes && (
-          <div className="bg-blue-100/50 p-3 rounded-lg">
-            <p className="text-xs text-blue-800">
+          <div className="bg-stone-100 p-3 rounded-lg">
+            <p className="text-xs text-black">
               <strong>Note:</strong> {probateInfo.notes}
             </p>
           </div>
@@ -169,7 +169,7 @@ const LocalLegalGuide: React.FC<LocalLegalGuideProps> = ({ userState }) => {
 
         {/* Action for low brain fog */}
         {userState.brainFogLevel <= 2 && (
-          <div className="mt-4 pt-4 border-t border-blue-200">
+          <div className="mt-4 pt-4 border-t border-stone-200">
             <button
               onClick={() => {
                 // In a real implementation, this would open:
@@ -178,7 +178,7 @@ const LocalLegalGuide: React.FC<LocalLegalGuideProps> = ({ userState }) => {
                 // - Contact form
                 window.open(`https://www.google.com/search?q=probate+court+near+${encodeURIComponent(userState.deceasedLocation)}`, '_blank');
               }}
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+              className="w-full bg-black text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-stone-800 transition-colors"
             >
               Contact Local Probate Court
             </button>

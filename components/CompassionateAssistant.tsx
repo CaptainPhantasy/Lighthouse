@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Send, Volume2, StopCircle, Map as MapIcon, Loader2, Sparkles, Volume1, FileText, Play, DraftingCompass } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Mic, Send, Volume2, StopCircle, Map as MapIcon, Loader2, Sparkles, Volume1, FileText, Play, DraftingCompass, Heart, BookOpen, Waves, SkipForward } from 'lucide-react';
 import { streamChatResponse, connectLiveSession, findFuneralHomes, generateSpeech, generateServiceOutline } from '../services/geminiService';
 import { ChatMessage, UserState, DocumentScan, ServicePreference } from '../types';
 import { SERVICE_PREFERENCES, OFFICIANT_QUESTIONS, SERVICE_TEMPLATES } from '../constants';
@@ -17,6 +18,9 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
   onServicePreferenceChange,
   onServiceOutlineChange
 }) => {
+  // Assistant modes: CHAT (normal), MEMORY_RECORDING (for capturing memories)
+  type AssistantMode = 'CHAT' | 'MEMORY_RECORDING';
+  const [assistantMode, setAssistantMode] = useState<AssistantMode>('CHAT');
   const [mode, setMode] = useState<'TEXT' | 'VOICE'>('TEXT');
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -26,6 +30,11 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
       timestamp: new Date()
     }
   ]);
+
+  // Memory Recording state
+  const [memories, setMemories] = useState<string[]>([]);
+  const [isRecordingMemory, setIsRecordingMemory] = useState(false);
+  const [currentTranscript, setCurrentTranscript] = useState('');
   const [input, setInput] = useState('');
   const [toast, setToast] = useState<{message: string, visible: boolean}>({message: '', visible: false});
 
@@ -505,20 +514,104 @@ ${template.closingSection}`;
     }
   };
 
+  // --- Memory Recording Functions ---
+  const startMemoryRecording = () => {
+    setIsRecordingMemory(true);
+    setCurrentTranscript('');
+    if (recognition) {
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.start();
+    }
+  };
+
+  const stopMemoryRecording = () => {
+    setIsRecordingMemory(false);
+    if (recognition) {
+      recognition.stop();
+    }
+    // Save the recorded memory
+    if (currentTranscript.trim()) {
+      const newMemory = currentTranscript.trim();
+      setMemories(prev => [...prev, newMemory]);
+
+      // Add to chat as a user message
+      const memoryMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: `[Memory Recorded] ${newMemory}`,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, memoryMessage]);
+
+      // Acknowledge the memory
+      setTimeout(() => {
+        const acknowledgment: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'model',
+          content: `Thank you for sharing that memory about ${userState.deceasedName || 'your loved one'}. I've saved it and will weave it into the service outline when you're ready.`,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, acknowledgment]);
+      }, 500);
+    }
+    setCurrentTranscript('');
+  };
+
+  const generateOutlineFromMemories = async () => {
+    if (memories.length === 0) {
+      showToast("Please record some memories first.");
+      return;
+    }
+
+    setIsGeneratingOutline(true);
+
+    try {
+      // Combine memories into a cohesive narrative for the service outline
+      const memoryText = memories.join('\n\n');
+
+      // Generate service outline from memories
+      const result = await generateServiceOutline(
+        [],
+        memories.map(m => ({ role: 'user', parts: [{ text: m }] })),
+        userState.deceasedName,
+        servicePreference,
+        documentScans
+      );
+
+      setServiceOutline(result.text);
+
+      const outlineMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'model',
+        content: `I've created a beautiful service outline weaving together the ${memories.length} ${memories.length === 1 ? 'memory' : 'memories'} you shared:\n\n${result.text}`,
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, outlineMessage]);
+      showToast("Service outline created from your memories!");
+    } catch (error) {
+      console.error('Error generating outline from memories:', error);
+      showToast("I had trouble creating the outline, but your memories are saved.");
+    } finally {
+      setIsGeneratingOutline(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full relative">
       {/* Toast Notification */}
       {toast.visible && (
-        <div className="fixed top-4 right-4 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg z-50 animate-fade-in">
+        <div className="fixed top-4 right-4 bg-black text-white px-4 py-3 rounded-xl shadow-xl z-50 animate-fade-in">
           <div className="flex items-center gap-2">
             <CheckCircle className="w-4 h-4" />
-            <span>{toast.message}</span>
+            <span className="text-sm font-medium">{toast.message}</span>
           </div>
         </div>
       )}
       {/* Service Preference Selector */}
-      <div className="mb-4 p-4 bg-gray-900/30 rounded-lg border border-gray-800">
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+      <div className="mb-4 p-4 bg-white border border-stone-200 rounded-2xl">
+        <label className="block text-sm font-bold mb-2">
           Service Preference
         </label>
         <div className="flex gap-2 flex-wrap">
@@ -526,10 +619,10 @@ ${template.closingSection}`;
             <button
               key={key}
               onClick={() => handlePreferenceChange(key as ServicePreference)}
-              className={`px-3 py-2 rounded-lg text-sm transition-all ${
+              className={`px-3 py-2 rounded-xl text-sm font-bold transition-all border ${
                 servicePreference === key
-                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/50'
-                  : 'bg-gray-800/50 text-gray-400 border border-gray-700 hover:bg-gray-800 hover:text-gray-200'
+                  ? 'bg-black text-white border-black'
+                  : 'bg-white text-stone-600 border-stone-300 hover:bg-stone-100'
               }`}
             >
               {value}
@@ -543,25 +636,155 @@ ${template.closingSection}`;
         <button
           onClick={generateServiceOutline}
           disabled={isGeneratingOutline}
-          className="flex items-center gap-2 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 text-blue-400 border border-blue-500/50 px-4 py-2 rounded-lg hover:from-blue-500 hover:to-indigo-500 hover:text-white transition-all disabled:opacity-50"
+          className="flex items-center gap-2 bg-black hover:bg-stone-800 text-white px-4 py-2 rounded-xl font-bold transition-all disabled:opacity-50"
         >
           <DraftingCompass className="w-4 h-4" />
           {isGeneratingOutline ? 'Generating...' : 'Draft Service Outline'}
         </button>
       </div>
 
+      {/* Mode Toggle: Chat vs Memory Recording */}
+      <div className="flex gap-2 mb-4 p-1 bg-stone-200 rounded-xl">
+        <motion.button
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setAssistantMode('CHAT')}
+          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+            assistantMode === 'CHAT'
+              ? 'bg-black text-white'
+              : 'text-stone-600 hover:text-black'
+          }`}
+        >
+          <BookOpen className="w-4 h-4" />
+          Chat Mode
+        </motion.button>
+        <motion.button
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setAssistantMode('MEMORY_RECORDING')}
+          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+            assistantMode === 'MEMORY_RECORDING'
+              ? 'bg-black text-white'
+              : 'text-stone-600 hover:text-black'
+          }`}
+        >
+          <Heart className="w-4 h-4" />
+          Memory Recording
+        </motion.button>
+      </div>
+
+      {/* Memory Recording Interface */}
+      <AnimatePresence mode="wait">
+        {assistantMode === 'MEMORY_RECORDING' && (
+          <motion.div
+            key="memory-recording"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+            className="mb-4 overflow-hidden"
+          >
+            <div className="bg-stone-100 border border-stone-300 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Heart className="w-5 h-5" />
+                <h3 className="font-bold">Memory Recording Mode</h3>
+              </div>
+              <p className="text-sm text-stone-600 mb-4">
+                Share your favorite memories of {userState.deceasedName || 'your loved one'}. Speak from the heart - I'll organize them into a beautiful service outline.
+              </p>
+
+              {/* Recording Button */}
+              {!isRecordingMemory ? (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={startMemoryRecording}
+                  className="w-full bg-black hover:bg-stone-800 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"
+                >
+                  <Mic className="w-5 h-5" />
+                  Start Recording Memory
+                </motion.button>
+              ) : (
+                <div className="space-y-3">
+                  <motion.div
+                    animate={{ scale: [1, 1.02, 1] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                    className="bg-black rounded-xl p-4 text-center"
+                  >
+                    <div className="flex items-center justify-center gap-2 text-white mb-2">
+                      <motion.div
+                        animate={{ scale: [1, 1.5, 1] }}
+                        transition={{ duration: 1, repeat: Infinity }}
+                        className="w-3 h-3 bg-white rounded-full"
+                      />
+                      <span className="font-bold">Recording...</span>
+                    </div>
+                    <p className="text-sm opacity-80">Share your memory. Tap Stop when finished.</p>
+                  </motion.div>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={stopMemoryRecording}
+                    className="w-full bg-stone-800 hover:bg-stone-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"
+                  >
+                    <StopCircle className="w-5 h-5" />
+                    Stop & Save Memory
+                  </motion.button>
+                </div>
+              )}
+
+              {/* Recorded Memories List */}
+              {memories.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold">
+                      {memories.length} {memories.length === 1 ? 'Memory' : 'Memories'} Recorded
+                    </span>
+                  </div>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {memories.map((memory, idx) => (
+                      <motion.div
+                        key={idx}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="bg-white rounded-lg p-3 text-sm text-stone-700 border border-stone-300"
+                      >
+                        "{memory.substring(0, 100)}{memory.length > 100 ? '...' : ''}"
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Generate Outline from Memories */}
+              {memories.length > 0 && (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={generateOutlineFromMemories}
+                  disabled={isGeneratingOutline}
+                  className="w-full mt-4 bg-black hover:bg-stone-800 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Sparkles className="w-5 h-5" />
+                  {isGeneratingOutline ? 'Weaving Memories...' : 'Create Service from Memories'}
+                </motion.button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Chat Interface */}
       <div className={`flex-1 overflow-y-auto pr-2 ${messages.length > 0 ? 'space-y-4' : ''}`}>
         {messages.map((message) => (
           <div key={message.id} className={`flex ${message.role === 'model' ? 'justify-start' : 'justify-end'}`}>
             <div className={`max-w-[80%] rounded-2xl p-4 ${message.role === 'model'
-              ? 'bg-gray-900/60 backdrop-blur-sm text-gray-100 border border-gray-800'
-              : 'bg-blue-600/20 backdrop-blur-sm text-blue-100 border border-blue-500/50'}`}>
+              ? 'bg-black text-white'
+              : 'bg-stone-200 text-black'}`}>
 
               {message.role === 'model' && (
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                  <span className="text-xs text-green-400">Lighthouse AI</span>
+                  <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                  <span className="text-xs opacity-80">Lighthouse AI</span>
                 </div>
               )}
 
@@ -572,7 +795,7 @@ ${template.closingSection}`;
                     <input
                       type="text"
                       placeholder="Share your thoughts..."
-                      className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-blue-500"
+                      className="w-full px-3 py-2 bg-white border border-stone-300 rounded-lg text-sm focus:outline-none focus:border-black"
                       onKeyPress={(e) => {
                         if (e.key === 'Enter') {
                           handleEulogyResponse((e.target as HTMLInputElement).value);
@@ -581,9 +804,9 @@ ${template.closingSection}`;
                     />
                     <button
                       onClick={handleSkipQuestion}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-gray-700/50 text-gray-400 text-sm rounded-lg hover:bg-gray-700 hover:text-gray-200 transition-all"
+                      className="flex items-center gap-1 px-3 py-1.5 bg-stone-200 text-stone-600 text-sm rounded-lg hover:bg-stone-300 transition-all"
                     >
-                      <Skip className="w-3 h-3" />
+                      <SkipForward className="w-3 h-3" />
                       Skip for now
                     </button>
                   </div>
@@ -594,7 +817,7 @@ ${template.closingSection}`;
                 <div className="flex items-center gap-2 mt-2 opacity-0 hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => handleCopyToClipboard(message.content)}
-                    className="text-xs text-gray-400 hover:text-gray-200"
+                    className="text-xs opacity-70 hover:opacity-100"
                   >
                     Copy
                   </button>
@@ -602,7 +825,7 @@ ${template.closingSection}`;
                     <button
                       onClick={playEulogyAudio}
                       disabled={isPlayingAudio}
-                      className="text-xs text-gray-400 hover:text-gray-200 flex items-center gap-1"
+                      className="text-xs opacity-70 hover:opacity-100 flex items-center gap-1"
                     >
                       {isPlayingAudio ? (
                         <>
@@ -625,10 +848,10 @@ ${template.closingSection}`;
 
         {isThinking && (
           <div className="flex justify-start">
-            <div className="bg-gray-900/60 backdrop-blur-sm text-gray-100 border border-gray-800 rounded-2xl p-4 max-w-[80%]">
+            <div className="bg-black text-white rounded-2xl p-4 max-w-[80%]">
               <div className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
-                <span className="text-sm text-gray-400">Thinking...</span>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-sm opacity-80">Thinking...</span>
               </div>
             </div>
           </div>
@@ -636,9 +859,9 @@ ${template.closingSection}`;
 
         {messages.length === 0 && (
           <div className="text-center py-12">
-            <Sparkles className="w-12 h-12 text-blue-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-100 mb-2">Your AI Companion</h3>
-            <p className="text-gray-400 text-sm">
+            <Sparkles className="w-12 h-12 mx-auto mb-4" />
+            <h3 className="text-lg font-bold mb-2">Your AI Companion</h3>
+            <p className="text-stone-500 text-sm">
               I'm here to help you navigate this journey with compassion and support.
             </p>
           </div>
@@ -646,19 +869,19 @@ ${template.closingSection}`;
 
         {/* Editable Service Outline */}
         {serviceOutline && (
-          <div className="mt-6 p-4 bg-gray-900/30 rounded-lg border border-gray-800">
+          <div className="mt-6 p-4 bg-stone-100 border border-stone-200 rounded-xl">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-gray-300">Service Outline</h3>
+              <h3 className="text-sm font-bold">Service Outline</h3>
               <div className="flex gap-2">
                 <button
                   onClick={() => setIsEditingOutline(!isEditingOutline)}
-                  className="px-3 py-1 bg-blue-500/20 text-blue-400 text-sm rounded-lg hover:bg-blue-500 hover:text-white transition-all"
+                  className="px-3 py-1 bg-black text-white text-sm rounded-lg hover:bg-stone-800 transition-all"
                 >
                   {isEditingOutline ? 'View' : 'Edit'}
                 </button>
                 <button
                   onClick={() => handleCopyToClipboard(editedOutline)}
-                  className="px-3 py-1 bg-gray-700/50 text-gray-400 text-sm rounded-lg hover:bg-gray-700 hover:text-gray-200 transition-all"
+                  className="px-3 py-1 bg-stone-200 text-stone-600 text-sm rounded-lg hover:bg-stone-300 transition-all"
                 >
                   Copy
                 </button>
@@ -673,11 +896,11 @@ ${template.closingSection}`;
                     onServiceOutlineChange(e.target.value);
                   }
                 }}
-                className="w-full h-64 px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono"
+                className="w-full h-64 px-3 py-2 bg-white border border-stone-300 rounded-lg text-sm focus:outline-none focus:border-black font-mono"
                 placeholder="Edit your service outline..."
               />
             ) : (
-              <pre className="whitespace-pre-wrap text-sm text-gray-300 overflow-x-auto max-h-64 font-mono">
+              <pre className="whitespace-pre-wrap text-sm text-stone-700 overflow-x-auto max-h-64 font-mono">
                 {editedOutline}
               </pre>
             )}
@@ -689,12 +912,12 @@ ${template.closingSection}`;
 
       {/* Input Area */}
       {messages.length > 0 && !isLiveActive && (
-        <div className="border-t border-gray-800 pt-4">
+        <div className="border-t border-stone-200 pt-4">
           <div className="flex gap-2">
             {mode === 'VOICE' ? (
               <div className="flex-1 flex flex-col items-center">
                 {isListening && (
-                  <div className="mb-2 text-red-400 text-sm">
+                  <div className="mb-2 text-black text-sm font-bold">
                     Listening... Speak now
                   </div>
                 )}
@@ -704,20 +927,20 @@ ${template.closingSection}`;
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="Speak or type your message..."
-                  className="flex-1 bg-gray-800/50 border border-gray-700 rounded-full px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                  className="flex-1 bg-white border border-stone-300 rounded-full px-4 py-3 placeholder-stone-500 focus:outline-none focus:border-black"
                 />
                 <div className="flex gap-2 mt-2">
                   <button
                     onClick={toggleVoiceInput}
                     disabled={isListening}
-                    className="bg-red-500/20 text-red-400 border border-red-500/50 p-3 rounded-full hover:bg-red-500 hover:text-white transition-all disabled:opacity-50"
+                    className="bg-black text-white p-3 rounded-full hover:bg-stone-800 transition-all disabled:opacity-50"
                   >
                     {isListening ? <StopCircle className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
                   </button>
                   <button
                     onClick={handleSend}
                     disabled={!input.trim()}
-                    className="bg-blue-500/20 text-blue-400 border border-blue-500/50 p-3 rounded-full hover:bg-blue-500 hover:text-white transition-all disabled:opacity-50"
+                    className="bg-black text-white p-3 rounded-full hover:bg-stone-800 transition-all disabled:opacity-50"
                   >
                     <Send className="w-5 h-5" />
                   </button>
@@ -731,12 +954,12 @@ ${template.closingSection}`;
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="Type your message..."
-                  className="flex-1 bg-gray-800/50 border border-gray-700 rounded-full px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                  className="flex-1 bg-white border border-stone-300 rounded-full px-4 py-3 placeholder-stone-500 focus:outline-none focus:border-black"
                 />
                 <button
                   onClick={handleSend}
                   disabled={!input.trim()}
-                  className="bg-blue-500/20 text-blue-400 border border-blue-500/50 p-3 rounded-full hover:bg-blue-500 hover:text-white transition-all disabled:opacity-50"
+                  className="bg-black text-white p-3 rounded-full hover:bg-stone-800 transition-all disabled:opacity-50"
                 >
                   <Send className="w-5 h-5" />
                 </button>
@@ -745,7 +968,7 @@ ${template.closingSection}`;
 
             <button
               onClick={() => setMode(mode === 'TEXT' ? 'VOICE' : 'TEXT')}
-              className="bg-gray-800/50 text-gray-400 border border-gray-700 p-3 rounded-full hover:bg-gray-800 hover:text-gray-200 transition-all"
+              className="bg-stone-200 text-stone-600 p-3 rounded-full hover:bg-stone-300 transition-all"
             >
               {mode === 'VOICE' ? (
                 <FileText className="w-5 h-5" />
@@ -759,22 +982,22 @@ ${template.closingSection}`;
 
       {/* Live Session Interface */}
       {isLiveActive && (
-        <div className="border-t border-gray-800 pt-4">
+        <div className="border-t border-stone-200 pt-4">
           <div className="text-center">
-            <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-2 animate-pulse">
-              <MapIcon className="w-6 h-6 text-red-400" />
+            <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center mx-auto mb-2 animate-pulse">
+              <MapIcon className="w-6 h-6 text-white" />
             </div>
-            <p className="text-sm text-red-400 mb-4">Live session active - I'm here for you</p>
+            <p className="text-sm font-bold mb-4">Live session active - I'm here for you</p>
 
             <div className="text-center">
-              <p className="text-xs text-gray-400 mb-4">How are you feeling right now?</p>
+              <p className="text-xs text-stone-500 mb-4">How are you feeling right now?</p>
 
               <div className="flex justify-center gap-2 mb-4">
                 {['Heartbroken', 'Overwhelmed', 'Anxious', 'Grateful', 'Peaceful'].map((emotion) => (
                   <button
                     key={emotion}
                     onClick={() => handleEmotionResponse(emotion)}
-                    className="px-4 py-2 bg-gray-800/50 text-gray-300 text-sm rounded-full hover:bg-gray-800 hover:text-gray-100 transition-all"
+                    className="px-4 py-2 bg-stone-200 text-stone-700 text-sm rounded-full hover:bg-stone-300 font-bold transition-all"
                   >
                     {emotion}
                   </button>

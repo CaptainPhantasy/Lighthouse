@@ -154,7 +154,7 @@ const TransportNavigator: React.FC<TransportNavigatorProps> = ({ userState }) =>
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'COMPLETED': return 'text-green-600 bg-green-50';
-      case 'IN_PROGRESS': return 'text-blue-600 bg-blue-50';
+      case 'IN_PROGRESS': return 'text-black bg-stone-100';
       default: return 'text-slate-600 bg-slate-50';
     }
   };
@@ -162,7 +162,7 @@ const TransportNavigator: React.FC<TransportNavigatorProps> = ({ userState }) =>
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'COMPLETED': return <CheckCircle className="w-4 h-4 text-green-600" />;
-      case 'IN_PROGRESS': return <Clock className="w-4 h-4 text-blue-600 animate-pulse" />;
+      case 'IN_PROGRESS': return <Clock className="w-4 h-4 text-black animate-pulse" />;
       default: return <AlertTriangle className="w-4 h-4 text-slate-400" />;
     }
   };
@@ -181,7 +181,7 @@ const TransportNavigator: React.FC<TransportNavigatorProps> = ({ userState }) =>
       {/* Header */}
       <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
         <div className="flex items-center gap-3 mb-3">
-          <Plane className="w-6 h-6 text-blue-600" />
+          <Plane className="w-6 h-6 text-black" />
           <h2 className="text-xl font-medium text-slate-800">Body Transport Navigator</h2>
         </div>
         <p className="text-slate-600 text-sm">
@@ -192,7 +192,7 @@ const TransportNavigator: React.FC<TransportNavigatorProps> = ({ userState }) =>
       {/* Current Regulations */}
       {loading ? (
         <div className="bg-white p-6 rounded-xl border border-slate-100 flex items-center gap-3">
-          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-black"></div>
           <span className="text-sm text-slate-600">Fetching current transport regulations...</span>
         </div>
       ) : error ? (
@@ -206,14 +206,14 @@ const TransportNavigator: React.FC<TransportNavigatorProps> = ({ userState }) =>
       ) : laws && (
         <div className="bg-white p-6 rounded-xl border border-slate-100 space-y-4">
           <h3 className="font-medium text-slate-800 flex items-center gap-2">
-            <Shield className="w-5 h-5 text-blue-600" />
+            <Shield className="w-5 h-5 text-black" />
             Current Regulations
           </h3>
 
           <div className="space-y-3">
-            <div className="p-3 bg-blue-50 rounded-lg">
-              <h4 className="text-sm font-medium text-blue-800 mb-1">FAA Requirements</h4>
-              <p className="text-xs text-blue-700 leading-relaxed">{laws.faaRegulations}</p>
+            <div className="p-3 bg-stone-100 rounded-lg">
+              <h4 className="text-sm font-medium text-black mb-1">FAA Requirements</h4>
+              <p className="text-xs text-stone-700 leading-relaxed">{laws.faaRegulations}</p>
             </div>
 
             <div className="p-3 bg-green-50 rounded-lg">
@@ -221,9 +221,9 @@ const TransportNavigator: React.FC<TransportNavigatorProps> = ({ userState }) =>
               <p className="text-xs text-green-700 leading-relaxed">{laws.airlineRequirements}</p>
             </div>
 
-            <div className="p-3 bg-purple-50 rounded-lg">
-              <h4 className="text-sm font-medium text-purple-800 mb-1">Funeral Home Role</h4>
-              <p className="text-xs text-purple-700 leading-relaxed">{laws.funeralHomeRole}</p>
+            <div className="p-3 bg-stone-100 rounded-lg">
+              <h4 className="text-sm font-medium text-stone-800 mb-1">Funeral Home Role</h4>
+              <p className="text-xs text-stone-700 leading-relaxed">{laws.funeralHomeRole}</p>
             </div>
           </div>
 
@@ -282,7 +282,7 @@ const TransportNavigator: React.FC<TransportNavigatorProps> = ({ userState }) =>
                   <button
                     onClick={() => updateStepStatus(step.id, 'IN_PROGRESS')}
                     disabled={step.status !== 'PENDING'}
-                    className="text-xs text-blue-600 hover:text-blue-700 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    className="text-xs text-black hover:text-stone-700 disabled:text-slate-400 disabled:cursor-not-allowed"
                   >
                     Mark in Progress
                   </button>
