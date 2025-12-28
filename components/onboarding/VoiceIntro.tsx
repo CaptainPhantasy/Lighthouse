@@ -17,7 +17,7 @@
  * - userLocation, deceasedLocation
  * - wishesKnowledgeLevel
  *
- * Only nudges for missing details after 5s of silence.
+ * Only nudges for missing details after 15s of silence (reduced urgency for thoughtful input).
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -55,7 +55,7 @@ interface ExtractedInfo {
 // ============================================================================
 
 const BREATH_CYCLE_DURATION = 4000; // 4 seconds per breath - slow, calming
-const SILENCE_THRESHOLD = 5000; // 5 seconds before gentle nudge
+const SILENCE_THRESHOLD = 15000; // 15 seconds before gentle nudge (allows thoughtful pause)
 const MAX_CONVERSATION_TURNS = 5; // Prevent infinite loops
 
 // ============================================================================

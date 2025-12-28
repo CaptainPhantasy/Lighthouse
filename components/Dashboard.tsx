@@ -100,8 +100,10 @@ const BentoGridOverview: React.FC<{
 }> = ({ tasks, documentScans, userState, onTabChange, isDark = false }) => {
   const completedTasks = tasks.filter(t => t.status === 'COMPLETED').length;
   const pendingTasks = tasks.filter(t => t.status === 'PENDING').length;
-  const highPriorityTasks = tasks.filter(t => t.priority === 'URGENT' || t.priority === 'HIGH' && t.status !== 'COMPLETED').length;
-  const progress = tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0;
+  const inProgressTasks = tasks.filter(t => t.status === 'IN_PROGRESS').length;
+  const actionRequiredTasks = tasks.filter(t =>
+    (t.priority === 'URGENT' || t.priority === 'HIGH') && t.status !== 'COMPLETED'
+  ).length;
   const hasTasks = tasks.length > 0;
 
   const isTransportPriority = userState.deceasedLocation === 'OUT_OF_STATE' && !userState.deathPronounced;
@@ -126,15 +128,17 @@ const BentoGridOverview: React.FC<{
             ? "You have an urgent task requiring attention. Let's take this one step at a time."
             : !hasTasks
             ? "Let's begin by creating your restoration plan. Take your time—we'll guide you through each step."
-            : progress === 100
+            : actionRequiredTasks > 0
+            ? `You have ${actionRequiredTasks} ${actionRequiredTasks === 1 ? 'task' : 'tasks'} requiring attention.`
+            : completedTasks === tasks.length
             ? "You've completed all your tasks. You're doing amazing."
-            : "You're making progress. Let's continue together."}
+            : "Let's continue working through your plan together."}
         </p>
       </motion.div>
 
       {/* Bento Grid */}
       <BentoGrid cols={3}>
-        {/* Progress Card - Large */}
+        {/* Task Triage Card - Replaces misleading percentage */}
         <BentoCard
           colSpan={2}
           type="primary"
@@ -143,45 +147,44 @@ const BentoGridOverview: React.FC<{
           isDark={isDark}
         >
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm opacity-70 mb-1">Overall Progress</p>
-              <p className="text-4xl font-bold">{hasTasks ? `${progress}%` : '—'}</p>
-              <p className="text-sm opacity-70 mt-2">
+            <div className="flex-1">
+              <p className="text-sm opacity-70 mb-1">Task Status</p>
+              <p className="text-3xl font-bold">
                 {hasTasks
-                  ? `${completedTasks} of ${tasks.length} tasks completed`
+                  ? `${completedTasks} ${completedTasks === 1 ? 'task' : 'tasks'} resolved`
                   : 'Start by adding your first task'}
               </p>
-            </div>
-            {hasTasks && (
-              <div className="w-24 h-24 relative">
-                <svg className="w-full h-full transform -rotate-90">
-                  <circle
-                    cx="48"
-                    cy="48"
-                    r="40"
-                    stroke="currentColor"
-                    strokeWidth="8"
-                    fill="none"
-                    className="opacity-20"
-                  />
-                  <circle
-                    cx="48"
-                    cy="48"
-                    r="40"
-                    stroke="currentColor"
-                    strokeWidth="8"
-                    fill="none"
-                    strokeDasharray={`${251.2 * (progress / 100)} 251.2`}
-                    className="transition-all duration-500"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  {progress === 100 ? (
-                    <CheckCircle2 className="w-10 h-10" />
-                  ) : (
-                    <TrendingUp className="w-10 h-10" />
-                  )}
+              <div className="flex flex-wrap gap-3 mt-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                  <span className="text-sm">
+                    <span className="font-semibold">{actionRequiredTasks}</span> Action Required
+                  </span>
                 </div>
+                {inProgressTasks > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                    <span className="text-sm">
+                      <span className="font-semibold">{inProgressTasks}</span> In Progress
+                    </span>
+                  </div>
+                )}
+                {completedTasks > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                    <span className="text-sm">
+                      <span className="font-semibold">{completedTasks}</span> Resolved
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+            {hasTasks && completedTasks === tasks.length && (
+              <CheckCircle2 className="w-16 h-16 text-green-500 flex-shrink-0" />
+            )}
+            {hasTasks && completedTasks < tasks.length && (
+              <div className="w-16 h-16 flex items-center justify-center bg-stone-200 rounded-2xl flex-shrink-0">
+                <ListTodo className="w-8 h-8 text-stone-600" />
               </div>
             )}
           </div>
@@ -332,7 +335,7 @@ const BentoGridOverview: React.FC<{
         )}
 
         {/* Resolution Card */}
-        {hasTasks && progress === 100 && (
+        {hasTasks && completedTasks === tasks.length && (
           <BentoCard
             colSpan={2}
             type="success"

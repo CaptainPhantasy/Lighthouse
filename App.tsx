@@ -15,6 +15,7 @@ import { type NarrativeCheckpoint } from './hooks/useCheckpointedNarrative';
 
 const AppContent: React.FC = () => {
   const [splashScreenVisible, setSplashScreenVisible] = useState(true);
+  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
   const [view, setView] = useState<AppView>(AppView.SENTIENT_GATEWAY); // Phase 2: Start with Sentient Gateway
   const [userState, setUserState] = useState<UserState>(INITIAL_USER_STATE);
   const [documentScans, setDocumentScans] = useState<DocumentScan[]>([]);
@@ -64,85 +65,90 @@ const AppContent: React.FC = () => {
     // 1. IMMEDIATE CHECK: If this is a volunteer link, STOP loading user data.
     // Let the Volunteer Hijack take over - don't restore saved state.
     if (window.location.pathname.startsWith('/volunteer/')) {
+      // Skip loading, dismiss splash immediately
+      setSplashScreenVisible(false);
+      setIsInitialLoadComplete(true);
       return;
     }
 
-    // Hide splash screen after 7 seconds
-    const splashTimer = setTimeout(() => {
-      setSplashScreenVisible(false);
-    }, 7000);
-
+    // 2. Load state asynchronously and dismiss splash when complete
+    // No fake 7-second delay - dismiss as soon as data is ready
     const loadState = async () => {
-      const savedView = localStorage.getItem('lighthouse_view');
-      const savedUserState = localStorage.getItem('userState');
-      const savedDocumentScans = localStorage.getItem('documentScans');
-      const savedTasks = localStorage.getItem('tasks');
-      const savedServiceOutline = localStorage.getItem('serviceOutline');
+      try {
+        const savedView = localStorage.getItem('lighthouse_view');
+        const savedUserState = localStorage.getItem('userState');
+        const savedDocumentScans = localStorage.getItem('documentScans');
+        const savedTasks = localStorage.getItem('tasks');
+        const savedServiceOutline = localStorage.getItem('serviceOutline');
 
-      if (savedView) {
-        setView(savedView as AppView);
-      }
+        if (savedView) {
+          setView(savedView as AppView);
+        }
 
-      // Decrypt and load user state
-      if (savedUserState) {
-        try {
-          const parsed = isEncrypted(JSON.parse(savedUserState))
-            ? await decryptObject(JSON.parse(savedUserState), ENCRYPTION_PASSWORD)
-            : JSON.parse(savedUserState);
+        // Decrypt and load user state
+        if (savedUserState) {
+          try {
+            const parsed = isEncrypted(JSON.parse(savedUserState))
+              ? await decryptObject(JSON.parse(savedUserState), ENCRYPTION_PASSWORD)
+              : JSON.parse(savedUserState);
 
-          // Ensure servicePreference is set
-          if (!parsed.servicePreference) {
-            parsed.servicePreference = 'SECULAR';
+            // Ensure servicePreference is set
+            if (!parsed.servicePreference) {
+              parsed.servicePreference = 'SECULAR';
+            }
+            setUserState(parsed);
+          } catch (error) {
+            console.error('Failed to decrypt user state:', error);
+            // If decryption fails, use initial state
+            setUserState(INITIAL_USER_STATE);
           }
-          setUserState(parsed);
-        } catch (error) {
-          console.error('Failed to decrypt user state:', error);
-          // If decryption fails, use initial state
-          setUserState(INITIAL_USER_STATE);
         }
-      }
 
-      // Decrypt and load document scans
-      if (savedDocumentScans) {
-        try {
-          const parsed = isEncrypted(JSON.parse(savedDocumentScans))
-            ? await decryptObject(JSON.parse(savedDocumentScans), ENCRYPTION_PASSWORD)
-            : JSON.parse(savedDocumentScans);
-          setDocumentScans(parsed);
-        } catch (error) {
-          console.error('Failed to decrypt document scans:', error);
-          setDocumentScans([]);
+        // Decrypt and load document scans
+        if (savedDocumentScans) {
+          try {
+            const parsed = isEncrypted(JSON.parse(savedDocumentScans))
+              ? await decryptObject(JSON.parse(savedDocumentScans), ENCRYPTION_PASSWORD)
+              : JSON.parse(savedDocumentScans);
+            setDocumentScans(parsed);
+          } catch (error) {
+            console.error('Failed to decrypt document scans:', error);
+            setDocumentScans([]);
+          }
         }
-      }
 
-      // Decrypt and load tasks
-      if (savedTasks) {
-        try {
-          const parsed = isEncrypted(JSON.parse(savedTasks))
-            ? await decryptObject(JSON.parse(savedTasks), ENCRYPTION_PASSWORD)
-            : JSON.parse(savedTasks);
-          setTasks(parsed);
-        } catch (error) {
-          console.error('Failed to decrypt tasks:', error);
-          setTasks([]);
+        // Decrypt and load tasks
+        if (savedTasks) {
+          try {
+            const parsed = isEncrypted(JSON.parse(savedTasks))
+              ? await decryptObject(JSON.parse(savedTasks), ENCRYPTION_PASSWORD)
+              : JSON.parse(savedTasks);
+            setTasks(parsed);
+          } catch (error) {
+            console.error('Failed to decrypt tasks:', error);
+            setTasks([]);
+          }
         }
-      }
 
-      // Decrypt and load service outline
-      if (savedServiceOutline) {
-        try {
-          const parsed = isEncrypted(JSON.parse(savedServiceOutline))
-            ? await decryptObject(JSON.parse(savedServiceOutline), ENCRYPTION_PASSWORD)
-            : JSON.parse(savedServiceOutline);
-          setUserState(prev => ({ ...prev, serviceOutline: parsed }));
-        } catch (error) {
-          console.error('Failed to decrypt service outline:', error);
+        // Decrypt and load service outline
+        if (savedServiceOutline) {
+          try {
+            const parsed = isEncrypted(JSON.parse(savedServiceOutline))
+              ? await decryptObject(JSON.parse(savedServiceOutline), ENCRYPTION_PASSWORD)
+              : JSON.parse(savedServiceOutline);
+            setUserState(prev => ({ ...prev, serviceOutline: parsed }));
+          } catch (error) {
+            console.error('Failed to decrypt service outline:', error);
+          }
         }
+      } finally {
+        // Data loading complete - dismiss splash screen immediately
+        setIsInitialLoadComplete(true);
+        setSplashScreenVisible(false);
       }
     };
 
     loadState();
-    return () => clearTimeout(splashTimer);
   }, []);
 
   // Save user state to localStorage when it changes
