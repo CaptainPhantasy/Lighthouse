@@ -270,6 +270,7 @@ const AppContent: React.FC = () => {
       {splashScreenVisible && (
         <SplashScreen
           onComplete={() => setSplashScreenVisible(false)}
+          ready={isInitialLoadComplete}
         />
       )}
 
