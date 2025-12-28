@@ -92,55 +92,80 @@ export function generateMemorialData(userState: UserState): MemorialData {
 }
 
 /**
- * The Complete Restoration Protocol
- *
- * Performs full PII destruction and returns memorial data to preserve
+ * Generate memorial data WITHOUT scrubbing (Phase 1 of safe restoration)
+ * This allows the UI to transition to Memorial Mode before data destruction.
  */
-export async function performCompleteRestoration(
+export function generateMemorialDataOnly(
   userState: UserState,
   lanternPDFUrl?: string
-): Promise<MemorialData> {
-  console.log('[SecureScrub] Initiating Complete Restoration Protocol...');
-
-  // 1. Generate memorial data BEFORE scrubbing
+): MemorialData {
   const memorialData = generateMemorialData(userState);
   if (lanternPDFUrl) {
     memorialData.lanternPDFUrl = lanternPDFUrl;
   }
 
-  // 2. Save memorial data to a special key (this survives the scrub)
+  // Save memorial data to a special key BEFORE scrubbing
+  // This is the ONLY data that survives the wipe
   localStorage.setItem(
     'lighthouse_memorial',
     JSON.stringify(memorialData)
   );
 
-  // 3. Scrub all PII from localStorage
-  scrubLocalStorage();
+  return memorialData;
+}
 
-  // 4. Clear sessionStorage as well
-  sessionStorage.clear();
+/**
+ * The Hard Delete Phase (Phase 2 of safe restoration)
+ * Call this ONLY after UI has successfully transitioned to Memorial Mode.
+ * This is the "Nuke" phase - destroys all PII data.
+ */
+export async function performHardDelete(): Promise<void> {
+  console.log('[SecureScrub] Performing Hard Delete phase...');
 
-  // 5. Trigger service worker cleanup (if present)
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(registrations => {
+  try {
+    // Scrub all PII from localStorage
+    scrubLocalStorage();
+
+    // Clear sessionStorage as well
+    sessionStorage.clear();
+
+    // Trigger service worker cleanup (if present)
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
       registrations.forEach(registration => {
         registration.unregister();
       });
-    });
+    }
+
+    // Clear any IndexedDB data
+    if (window.indexedDB) {
+      const databases = await indexedDB.databases();
+      databases.forEach(db => {
+        if (db.name) {
+          indexedDB.deleteDatabase(db.name);
+        }
+      });
+    }
+
+    console.log('[SecureScrub] Hard Delete phase complete.');
+  } catch (error) {
+    console.error('[SecureScrub] Hard Delete encountered errors:', error);
+    throw error;
   }
+}
 
-  // 6. Clear any IndexedDB data
-  if (window.indexedDB) {
-    const databases = await indexedDB.databases();
-    databases.forEach(db => {
-      if (db.name) {
-        indexedDB.deleteDatabase(db.name);
-      }
-    });
-  }
+/**
+ * @deprecated Use generateMemorialDataOnly + performHardDelete separately for safety.
+ * This function exists for backward compatibility but performs both phases atomlessly.
+ */
+export async function performCompleteRestoration(
+  userState: UserState,
+  lanternPDFUrl?: string
+): Promise<MemorialData> {
+  console.warn('[SecureScrub] performCompleteRestoration is deprecated. Use two-phase approach for data safety.');
 
-  console.log('[SecureScrub] Complete Restoration Protocol finished.');
-
+  const memorialData = generateMemorialDataOnly(userState, lanternPDFUrl);
+  await performHardDelete();
   return memorialData;
 }
 

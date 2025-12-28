@@ -12,7 +12,8 @@ import {
   type LanternPDFData,
 } from '../services/lanternService';
 import {
-  performCompleteRestoration,
+  generateMemorialDataOnly,
+  performHardDelete,
   hasMemorial,
   getMemorial as getMemorialData,
   clearMemorial,
@@ -71,6 +72,7 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
   const [memorialData, setMemorialData] = useState<ReturnType<typeof getMemorialData> | null>(null);
   const [lanternGenerating, setLanternGenerating] = useState(false);
   const [showScrubConfirm, setShowScrubConfirm] = useState(false);
+  const [hardDeletePending, setHardDeletePending] = useState(false);
 
   useEffect(() => {
     // Check for existing memorial (app has been restored)
@@ -101,6 +103,35 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
     }));
     setDocumentRecords(records);
   }, [tasks, documentScans]);
+
+  // Phase 2: Deferred Hard Delete - Trigger AFTER UI has transitioned to Memorial Mode
+  // This prevents data loss if the UI crashes during the transition
+  useEffect(() => {
+    if (hardDeletePending && memorialMode && memorialData) {
+      // Use requestAnimationFrame to ensure the UI has painted the memorial screen
+      const rafId = requestAnimationFrame(() => {
+        // Use setTimeout to defer one more tick after the paint
+        setTimeout(async () => {
+          try {
+            console.log('[ResolutionReport] UI transitioned, performing hard delete...');
+            await performHardDelete();
+            console.log('[ResolutionReport] Hard delete complete.');
+            // Notify parent to unmount sensitive components
+            if (onSanitizeData) {
+              onSanitizeData();
+            }
+          } catch (error) {
+            console.error('[ResolutionReport] Hard delete failed:', error);
+            alert('Visual restoration complete, but data could not be fully wiped. Please clear browser cache manually.');
+          } finally {
+            setHardDeletePending(false);
+          }
+        }, 100);
+      });
+
+      return () => cancelAnimationFrame(rafId);
+    }
+  }, [hardDeletePending, memorialMode, memorialData, onSanitizeData]);
 
   // Check if all urgent and high priority tasks are completed
   const allUrgentAndHighCompleted = tasks.every(task => {
@@ -238,8 +269,10 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
     }
   };
 
-  // Phase 2: Secure Scrub - Complete Restoration Protocol
-  const handleSecureScrub = async () => {
+  // Phase 2: Secure Scrub - Two-Phase Safe Restoration Protocol
+  // Phase 1: Generate memorial and transition UI (immediate, no data loss risk)
+  // Phase 2: Hard delete is triggered by useEffect after UI paints
+  const handleSecureScrub = () => {
     if (!containsPII(userState)) {
       alert('No personal information found to scrub.');
       return;
@@ -247,18 +280,25 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
 
     setIsSanitizing(true);
 
-    // Perform complete restoration
-    const memorial = await performCompleteRestoration(userState);
+    try {
+      // PHASE 1: Generate memorial data WITHOUT wiping storage
+      // This is safe - no data is destroyed yet
+      const memorial = generateMemorialDataOnly(userState);
 
-    // Update state to memorial mode
-    setMemorialMode(true);
-    setMemorialData(memorial);
-    setIsSanitizing(false);
-    setShowScrubConfirm(false);
+      // Update UI state IMMEDIATELY to show Memorial Mode
+      // The user will see the success screen right away
+      setMemorialData(memorial);
+      setMemorialMode(true);
+      setShowScrubConfirm(false);
 
-    // Notify parent if callback exists
-    if (onSanitizeData) {
-      onSanitizeData();
+      // Flag that hard delete is pending - will trigger useEffect after UI paints
+      setHardDeletePending(true);
+
+      setIsSanitizing(false);
+    } catch (error) {
+      console.error('[SecureScrub] Failed to generate memorial:', error);
+      setIsSanitizing(false);
+      alert('Failed to prepare memorial. Please try again.');
     }
   };
 

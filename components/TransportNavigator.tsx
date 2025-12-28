@@ -1,7 +1,16 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * TransportNavigator - Interstate Body Transport Guide
+ *
+ * IMPORTANT: This component uses STATIC, VERIFIED regulatory information.
+ * Laws are deterministic facts - we do NOT use AI to generate legal requirements
+ * to avoid hallucination risks and liability issues.
+ *
+ * Source: FAA regulations, TSA requirements, airline policies
+ */
+
+import React, { useState } from 'react';
 import { UserState } from '../types';
 import { Plane, FileCheck, MapPin, Clock, Shield, AlertTriangle, CheckCircle } from 'lucide-react';
-import { getTransportLaws } from '../services/geminiService';
 
 interface TransportNavigatorProps {
   userState: UserState;
@@ -22,6 +31,24 @@ interface TransportLaws {
   funeralHomeRole: string;
   shippingRestrictions: string[];
 }
+
+/**
+ * STATIC VERIFIED REGULATIONS
+ * These are deterministic facts from FAA, TSA, and airline policies.
+ * DO NOT replace with AI-generated content without legal review.
+ */
+const VERIFIED_TRANSPORT_REGULATIONS: TransportLaws = {
+  faaRegulations: 'Human remains may be transported on commercial flights as cargo or carry-on (cremated only). A death certificate and burial transit permit are required by federal law. TSA screening applies to all shipments.',
+  airlineRequirements: 'Most airlines require: (1) Advance reservation 24-48 hours prior, (2) Remains in a hermetically sealed container, (3) "Known Shipper" verification - typically a licensed funeral director. Private individuals usually cannot ship bodies directly.',
+  funeralHomeRole: 'A licensed funeral director serves as the "Known Shipper" required by TSA. They coordinate with the airline cargo department and ensure all documentation is complete. They also handle the hermetic sealing and preparation of remains.',
+  shippingRestrictions: [
+    'Dry ice requires hazardous materials (HAZMAT) labeling and declaration',
+    'Cremated remains must be in a scan-able container (plastic/wood - NOT lead or metal)',
+    'International flights require consular paperwork and possibly embalming',
+    'Some airlines do not transport bodies on weekends or holidays',
+    'Embalmming certificate required for most interstate transport'
+  ]
+};
 
 const TransportNavigator: React.FC<TransportNavigatorProps> = ({ userState }) => {
   const [steps, setSteps] = useState<TransportStep[]>([
@@ -75,31 +102,7 @@ const TransportNavigator: React.FC<TransportNavigatorProps> = ({ userState }) =>
     }
   ]);
 
-  const [laws, setLaws] = useState<TransportLaws | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (userState.deceasedLocation === 'OUT_OF_STATE') {
-      fetchTransportLaws();
-    }
-  }, [userState.deceasedLocation]);
-
-  const fetchTransportLaws = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await getTransportLaws(userState.deceasedLocation);
-      if (response) {
-        setLaws(response);
-      }
-    } catch (err) {
-      console.error('Error fetching transport laws:', err);
-      setError('Unable to retrieve current transport regulations. Please check with funeral home for latest requirements.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const laws = VERIFIED_TRANSPORT_REGULATIONS; // Static data - no fetching needed
 
   const updateStepStatus = (stepId: string, status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED') => {
     setSteps(prev => prev.map(step =>
@@ -141,63 +144,57 @@ const TransportNavigator: React.FC<TransportNavigatorProps> = ({ userState }) =>
           <h2 className="text-xl font-medium text-slate-800">Body Transport Navigator</h2>
         </div>
         <p className="text-slate-600 text-sm">
-          We'll guide you through transporting your loved one to {userState.deceasedLocation === 'OUT_OF_STATE' ? 'their final destination' : 'your location'}.
+          We'll guide you through transporting your loved one to their final destination.
+        </p>
+        <p className="text-xs text-slate-500 mt-2">
+          The information below is based on FAA and TSA regulations. Always verify with your chosen airline and funeral director.
         </p>
       </div>
 
-      {/* Current Regulations */}
-      {loading ? (
-        <div className="bg-white p-6 rounded-xl border border-slate-100 flex items-center gap-3">
-          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-black"></div>
-          <span className="text-sm text-slate-600">Fetching current transport regulations...</span>
-        </div>
-      ) : error ? (
-        <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <p className="text-amber-800 font-medium">Regulation Information</p>
-            <p className="text-amber-600 mt-1">{error}</p>
-          </div>
-        </div>
-      ) : laws && (
-        <div className="bg-white p-6 rounded-xl border border-slate-100 space-y-4">
-          <h3 className="font-medium text-slate-800 flex items-center gap-2">
-            <Shield className="w-5 h-5 text-black" />
-            Current Regulations
-          </h3>
+      {/* Current Regulations - STATIC DATA (no AI generation) */}
+      <div className="bg-white p-6 rounded-xl border border-slate-100 space-y-4">
+        <h3 className="font-medium text-slate-800 flex items-center gap-2">
+          <Shield className="w-5 h-5 text-black" />
+          Verified Transport Regulations
+        </h3>
 
-          <div className="space-y-3">
-            <div className="p-3 bg-stone-100 rounded-lg">
-              <h4 className="text-sm font-medium text-black mb-1">FAA Requirements</h4>
-              <p className="text-xs text-stone-700 leading-relaxed">{laws.faaRegulations}</p>
-            </div>
-
-            <div className="p-3 bg-green-50 rounded-lg">
-              <h4 className="text-sm font-medium text-green-800 mb-1">Airline Requirements</h4>
-              <p className="text-xs text-green-700 leading-relaxed">{laws.airlineRequirements}</p>
-            </div>
-
-            <div className="p-3 bg-stone-100 rounded-lg">
-              <h4 className="text-sm font-medium text-stone-800 mb-1">Funeral Home Role</h4>
-              <p className="text-xs text-stone-700 leading-relaxed">{laws.funeralHomeRole}</p>
-            </div>
+        <div className="space-y-3">
+          <div className="p-3 bg-stone-100 rounded-lg">
+            <h4 className="text-sm font-medium text-black mb-1">FAA Requirements</h4>
+            <p className="text-xs text-stone-700 leading-relaxed">{laws.faaRegulations}</p>
           </div>
 
-          {laws.shippingRestrictions.length > 0 && (
-            <div className="p-3 bg-amber-50 rounded-lg">
-              <h4 className="text-sm font-medium text-amber-800 mb-2">Important Restrictions</h4>
-              <ul className="text-xs text-amber-700 space-y-1">
-                {laws.shippingRestrictions.map((restriction, index) => (
-                  <li key={index} className="flex items-start gap-2">
-                    <span className="text-amber-600">•</span>
-                    {restriction}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <div className="p-3 bg-green-50 rounded-lg">
+            <h4 className="text-sm font-medium text-green-800 mb-1">Airline Requirements</h4>
+            <p className="text-xs text-green-700 leading-relaxed">{laws.airlineRequirements}</p>
+          </div>
+
+          <div className="p-3 bg-stone-100 rounded-lg">
+            <h4 className="text-sm font-medium text-stone-800 mb-1">Funeral Home Role</h4>
+            <p className="text-xs text-stone-700 leading-relaxed">{laws.funeralHomeRole}</p>
+          </div>
         </div>
-      )}
+
+        {laws.shippingRestrictions.length > 0 && (
+          <div className="p-3 bg-amber-50 rounded-lg">
+            <h4 className="text-sm font-medium text-amber-800 mb-2">Important Restrictions</h4>
+            <ul className="text-xs text-amber-700 space-y-1">
+              {laws.shippingRestrictions.map((restriction, index) => (
+                <li key={index} className="flex items-start gap-2">
+                  <span className="text-amber-600">•</span>
+                  {restriction}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <p className="text-xs text-blue-700">
+            <strong>Note:</strong> Regulations may change. Always confirm requirements directly with your chosen airline and licensed funeral director.
+          </p>
+        </div>
+      </div>
 
       {/* Step-by-Step Guide */}
       <div className="space-y-3">

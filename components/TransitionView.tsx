@@ -19,29 +19,11 @@ const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }
   const [showPriorityCard, setShowPriorityCard] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
-  const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [showAudioButton, setShowAudioButton] = useState(false);
   const [audioGenerated, setAudioGenerated] = useState(false);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-
-  // Check for user interaction
-  useEffect(() => {
-    const handleUserInteraction = () => {
-      setHasUserInteracted(true);
-    };
-
-    window.addEventListener('click', handleUserInteraction);
-    window.addEventListener('keydown', handleUserInteraction);
-    window.addEventListener('touchstart', handleUserInteraction);
-
-    return () => {
-      window.removeEventListener('click', handleUserInteraction);
-      window.removeEventListener('keydown', handleUserInteraction);
-      window.removeEventListener('touchstart', handleUserInteraction);
-    };
-  }, []);
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -60,9 +42,10 @@ const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }
     };
   }, []);
 
-  // Generate and play speech on mount
+  // Generate speech on mount for pre-loading, BUT DO NOT AUTO-PLAY (WCAG 1.4.2 compliance)
+  // Audio must be opt-in - user must explicitly click to play
   useEffect(() => {
-    const generateAndPlaySpeech = async () => {
+    const prepareAudio = async () => {
       const welcomeMessage = `Take a breath, ${userState.name || 'friend'}. We've heard you. You don't have to carry this alone.`;
 
       try {
@@ -70,28 +53,18 @@ const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }
         if (buffer) {
           audioBufferRef.current = buffer;
           setAudioGenerated(true);
-
-          // Only auto-play if user has interacted and not muted
-          if (hasUserInteracted && !isMuted) {
-            const played = await playAudio(buffer);
-            if (!played) {
-              // Auto-play was blocked, show the button
-              setShowAudioButton(true);
-            }
-          } else {
-            // No interaction yet, show the button
-            setShowAudioButton(true);
-          }
+          // Always show the play button - audio is OPT-IN only (WCAG compliance)
+          setShowAudioButton(true);
         }
       } catch (error) {
         console.error('Error generating speech:', error);
-        // Show the button as a fallback
+        // Show button even if generation failed (user can try again)
         setShowAudioButton(true);
       }
     };
 
-    generateAndPlaySpeech();
-  }, [userState.name, hasUserInteracted]);
+    prepareAudio();
+  }, [userState.name]);
 
   const playAudio = async (buffer: AudioBuffer): Promise<boolean> => {
     if (!audioContextRef.current) {
@@ -271,10 +244,10 @@ const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }
                 <Feather className="w-5 h-5 text-slate-400" />
               </div>
 
-              {/* Audio Controls */}
+              {/* Audio Controls - OPT-IN ONLY (WCAG 1.4.2 compliance) */}
               <div className="flex items-center justify-center gap-2">
-                {/* Fallback "Listen to message" button for autoplay blocking */}
-                {showAudioButton && audioGenerated && (
+                {/* Always show the "Listen to message" button - audio is opt-in */}
+                {showAudioButton && (
                   <motion.button
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -282,21 +255,23 @@ const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }
                     whileTap={{ scale: 0.95 }}
                     onClick={handleListenToMessage}
                     className={`flex items-center gap-2 px-5 py-3 ${isDark ? 'bg-stone-700 hover:bg-stone-600' : 'bg-black hover:bg-stone-800'} text-white rounded-full transition-colors shadow-lg`}
+                    aria-label="Play welcome message from Lighthouse"
+                    role="button"
                   >
-                    <Headphones className="w-5 h-5" />
-                    <span className="font-medium">Listen to a message</span>
+                    <Headphones className="w-5 h-5" aria-hidden="true" />
+                    <span className="font-medium">Listen to message</span>
                   </motion.button>
                 )}
 
-                {/* Standard audio controls when audio is playing or was played */}
+                {/* Audio controls showing during/after playback */}
                 {!showAudioButton && (
-                  <>
+                  <div className="flex items-center justify-center gap-2">
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={toggleMute}
                       className="p-2 rounded-full bg-stone-100 hover:bg-stone-200 transition-colors border border-stone-200"
-                      aria-label={isMuted ? 'Unmute' : 'Mute'}
+                      aria-label={isMuted ? 'Unmute audio' : 'Mute audio'}
                     >
                       {isMuted ? (
                         <VolumeX className="w-4 h-4 text-black" />
@@ -319,6 +294,8 @@ const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         className="text-xs text-stone-700 flex items-center gap-1"
+                        aria-live="polite"
+                        aria-label="Audio is currently playing"
                       >
                         <span className="relative flex h-2 w-2">
                           <motion.span
@@ -338,7 +315,7 @@ const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }
                         Playing
                       </motion.span>
                     )}
-                  </>
+                  </div>
                 )}
               </div>
 
