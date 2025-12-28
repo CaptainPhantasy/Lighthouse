@@ -1,45 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AuroraBackground } from './ui/aurora-background';
 
 interface SplashScreenProps {
   onComplete: () => void;
-  ready?: boolean; // External signal that data is loaded
 }
 
-const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete, ready = true }) => {
-  const [progress, setProgress] = useState(0);
-  const [showMessage, setShowMessage] = useState(false);
+const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
   const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
-    // Reveal message after a brief moment
-    const messageTimer = setTimeout(() => setShowMessage(true), 500);
+    // Simple, reliable timing: show splash for 2 seconds then exit
+    const exitTimer = setTimeout(() => {
+      setIsExiting(true);
+      // Call onComplete after exit animation
+      setTimeout(() => {
+        onComplete();
+      }, 500);
+    }, 2000);
 
-    // Progress animation - completes quickly when ready=true
-    const duration = ready ? 1500 : 7000; // Fast if data ready, otherwise slow fallback
-    const increment = ready ? 2 : 1.43;
-
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          // Trigger exit animation
-          setTimeout(() => {
-            setIsExiting(true);
-            setTimeout(() => onComplete(), 500); // Wait for exit animation
-          }, 300);
-          return 100;
-        }
-        return prev + increment;
-      });
-    }, 100);
-
-    return () => {
-      clearInterval(interval);
-      clearTimeout(messageTimer);
-    };
-  }, [ready, onComplete]);
+    return () => clearTimeout(exitTimer);
+  }, [onComplete]);
 
   return (
     <AnimatePresence>
@@ -74,52 +55,40 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete, ready = true })
               </motion.div>
 
               {/* Main Title */}
-              {showMessage && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8 }}
-                  className="text-center"
-                >
-                  <h1 className="text-4xl md:text-5xl font-light text-white tracking-tight mb-3">
-                    Lighthouse
-                  </h1>
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 1, delay: 0.3 }}
-                    className="text-white/80 text-base md:text-lg font-light tracking-wide"
-                  >
-                    Guiding you through darkness into light
-                  </motion.p>
-                </motion.div>
-              )}
-
-              {/* Progress Bar */}
-              {showMessage && (
-                <motion.div
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.2 }}
+                className="text-center"
+              >
+                <h1 className="text-4xl md:text-5xl font-light text-white tracking-tight mb-3">
+                  Lighthouse
+                </h1>
+                <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ duration: 0.8, delay: 0.4 }}
-                  className="mt-12 w-full max-w-xs"
+                  transition={{ duration: 1, delay: 0.5 }}
+                  className="text-white/80 text-base md:text-lg font-light tracking-wide"
                 >
-                  <div className="relative h-0.5 bg-white/10 rounded-full overflow-hidden">
-                    <motion.div
-                      className="absolute left-0 top-0 h-full bg-white rounded-full"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${progress}%` }}
-                      transition={{ duration: 0.3, ease: "easeOut" }}
-                    />
-                  </div>
-                  <motion.p
-                    className="text-center text-white/40 text-xs mt-4 font-light tracking-widest uppercase"
-                    animate={{ opacity: [0.4, 0.8, 0.4] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                  >
-                    {progress < 100 ? 'Preparing your journey' : 'Welcome'}
-                  </motion.p>
-                </motion.div>
-              )}
+                  Guiding you through darkness into light
+                </motion.p>
+              </motion.div>
+
+              {/* Loading indicator */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.8, delay: 0.8 }}
+                className="mt-12"
+              >
+                <motion.p
+                  className="text-center text-white/40 text-xs font-light tracking-widest uppercase"
+                  animate={{ opacity: [0.4, 0.8, 0.4] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  Loading...
+                </motion.p>
+              </motion.div>
             </div>
           </AuroraBackground>
         </motion.div>

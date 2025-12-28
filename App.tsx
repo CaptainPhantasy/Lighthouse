@@ -15,7 +15,6 @@ import { type NarrativeCheckpoint } from './hooks/useCheckpointedNarrative';
 
 const AppContent: React.FC = () => {
   const [splashScreenVisible, setSplashScreenVisible] = useState(true);
-  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
   const [view, setView] = useState<AppView>(AppView.SENTIENT_GATEWAY); // Phase 2: Start with Sentient Gateway
   const [userState, setUserState] = useState<UserState>(INITIAL_USER_STATE);
   const [documentScans, setDocumentScans] = useState<DocumentScan[]>([]);
@@ -26,21 +25,6 @@ const AppContent: React.FC = () => {
   const [voiceMode, setVoiceMode] = useState<'voice' | 'discretion'>('voice');
   const [restoredCheckpoint, setRestoredCheckpoint] = useState<NarrativeCheckpoint | undefined>(undefined);
 
-  // Check for Volunteer URL on mount
-  useEffect(() => {
-    const path = window.location.pathname;
-    // matches /volunteer/[uuid]
-    if (path.startsWith('/volunteer/')) {
-      const requestId = path.split('/volunteer/')[1];
-      if (requestId) {
-        setVolunteerRequestId(requestId);
-        setView(AppView.VOLUNTEER);
-        setSplashScreenVisible(false); // Skip splash for volunteers
-        return;
-      }
-    }
-  }, []);
-
   // Phase 2: Check for narrative checkpoint on mount
   useEffect(() => {
     if (view !== AppView.SENTIENT_GATEWAY) return;
@@ -50,7 +34,7 @@ const AppContent: React.FC = () => {
       if (savedCheckpoint) {
         const checkpoint = JSON.parse(savedCheckpoint) as NarrativeCheckpoint;
         // Only restore if less than 24 hours old
-        const age = Date.now() - (checkpoint as any).lastUpdate;
+        const age = Date.now() - checkpoint.lastUpdate;
         if (age < 24 * 60 * 60 * 1000) {
           setRestoredCheckpoint(checkpoint);
         }
@@ -67,12 +51,10 @@ const AppContent: React.FC = () => {
     if (window.location.pathname.startsWith('/volunteer/')) {
       // Skip loading, dismiss splash immediately
       setSplashScreenVisible(false);
-      setIsInitialLoadComplete(true);
       return;
     }
 
-    // 2. Load state asynchronously and dismiss splash when complete
-    // No fake 7-second delay - dismiss as soon as data is ready
+    // 2. Load state asynchronously
     const loadState = async () => {
       try {
         const savedView = localStorage.getItem('lighthouse_view');
@@ -141,11 +123,10 @@ const AppContent: React.FC = () => {
             console.error('Failed to decrypt service outline:', error);
           }
         }
-      } finally {
-        // Data loading complete - dismiss splash screen immediately
-        setIsInitialLoadComplete(true);
-        setSplashScreenVisible(false);
+      } catch (error) {
+        console.error('Error loading state:', error);
       }
+      // Note: Don't dismiss splash here - let the SplashScreen component handle its own timing
     };
 
     loadState();
@@ -167,75 +148,51 @@ const AppContent: React.FC = () => {
     }
   }, [userState]);
 
-  // Save document scans to localStorage
-  useEffect(() => {
-    if (documentScans.length > 0) {
-      encryptObject(documentScans, ENCRYPTION_PASSWORD)
-        .then(encrypted => {
-          localStorage.setItem('documentScans', JSON.stringify(encrypted));
-        })
-        .catch(error => {
-          console.error('Failed to encrypt document scans:', error);
-          localStorage.setItem('documentScans', JSON.stringify(documentScans));
-        });
-    }
-  }, [documentScans]);
-
-  // Save tasks to localStorage
+  // Save tasks to localStorage when they change
   useEffect(() => {
     if (tasks.length > 0) {
-      encryptObject(tasks, ENCRYPTION_PASSWORD)
-        .then(encrypted => {
-          localStorage.setItem('tasks', JSON.stringify(encrypted));
-        })
-        .catch(error => {
-          console.error('Failed to encrypt tasks:', error);
-          localStorage.setItem('tasks', JSON.stringify(tasks));
-        });
+      const encrypted = encryptObject(tasks, ENCRYPTION_PASSWORD);
+      encrypted.then(result => {
+        localStorage.setItem('tasks', JSON.stringify(result));
+      }).catch(error => {
+        console.error('Failed to encrypt tasks:', error);
+        localStorage.setItem('tasks', JSON.stringify(tasks));
+      });
     }
   }, [tasks]);
 
-  // Save service outline to localStorage
+  // Save document scans to localStorage when they change
   useEffect(() => {
-    if (userState.serviceOutline) {
-      encryptObject(userState.serviceOutline, ENCRYPTION_PASSWORD)
-        .then(encrypted => {
-          localStorage.setItem('serviceOutline', JSON.stringify(encrypted));
-        })
-        .catch(error => {
-          console.error('Failed to encrypt service outline:', error);
-          localStorage.setItem('serviceOutline', JSON.stringify(userState.serviceOutline));
-        });
+    if (documentScans.length > 0) {
+      const encrypted = encryptObject(documentScans, ENCRYPTION_PASSWORD);
+      encrypted.then(result => {
+        localStorage.setItem('documentScans', JSON.stringify(result));
+      }).catch(error => {
+        console.error('Failed to encrypt document scans:', error);
+        localStorage.setItem('documentScans', JSON.stringify(documentScans));
+      });
     }
-  }, [userState.serviceOutline]);
+  }, [documentScans]);
 
-  const handleIntakeComplete = (data: UserState) => {
-    setUserState(data);
-    setView(AppView.TRANSITION);
-    localStorage.setItem('lighthouse_view', AppView.TRANSITION);
+  // Extract volunteer request ID from URL if present
+  useEffect(() => {
+    const pathParts = window.location.pathname.split('/');
+    if (pathParts[1] === 'volunteer' && pathParts[2]) {
+      setVolunteerRequestId(pathParts[2]);
+      setView(AppView.VOLUNTEER);
+    }
+  }, []);
+
+  const handleTaskCreated = (task: Task) => {
+    setTasks(prev => [...prev, task]);
   };
 
-  const handleTransitionComplete = () => {
-    setView(AppView.DASHBOARD);
-    localStorage.setItem('lighthouse_view', AppView.DASHBOARD);
-  };
-
-  const handleTaskCreated = (newTask: Task) => {
-    setTasks(prev => [...prev, newTask]);
-  };
-
-  const handleDocumentScan = (document: DocumentScan) => {
-    setDocumentScans(prev => [...prev, document]);
+  const handleDocumentScan = (scan: DocumentScan) => {
+    setDocumentScans(prev => [...prev, scan]);
   };
 
   const handleServicePreferenceChange = (preference: ServicePreference) => {
     setUserState(prev => ({ ...prev, servicePreference: preference }));
-  };
-
-  const handleServiceOutlineChange = (outline: string) => {
-    setUserState(prev => ({ ...prev, serviceOutline: outline }));
-    // Also save to localStorage
-    localStorage.setItem('serviceOutline', outline);
   };
 
   // Phase 2: Sentient onboarding handlers
@@ -245,7 +202,6 @@ const AppContent: React.FC = () => {
   };
 
   const handleResumeCheckpoint = () => {
-    setRestoredCheckpoint(restoredCheckpoint);
     setView(AppView.VOICE_INTRO);
   };
 
@@ -265,16 +221,28 @@ const AppContent: React.FC = () => {
     localStorage.removeItem('lighthouse_narrative_checkpoint');
   };
 
+  const handleTransitionComplete = () => {
+    setView(AppView.DASHBOARD);
+    localStorage.setItem('lighthouse_view', AppView.DASHBOARD);
+  };
+
+  const handleIntakeComplete = (data: Partial<UserState>) => {
+    setUserState(prev => ({ ...prev, ...data }));
+    setView(AppView.TRANSITION);
+    localStorage.setItem('lighthouse_view', AppView.TRANSITION);
+  };
+
+  const handleServiceOutlineChange = (outline: string) => {
+    setUserState(prev => ({ ...prev, serviceOutline: outline }));
+    // Also save to localStorage
+    localStorage.setItem('serviceOutline', outline);
+  };
+
   return (
     <>
-      {splashScreenVisible && (
-        <SplashScreen
-          onComplete={() => setSplashScreenVisible(false)}
-          ready={isInitialLoadComplete}
-        />
-      )}
-
-      {!splashScreenVisible && (
+      {splashScreenVisible ? (
+        <SplashScreen onComplete={() => setSplashScreenVisible(false)} />
+      ) : (
         <>
           {view === AppView.SENTIENT_GATEWAY ? (
             <SentientGateway
