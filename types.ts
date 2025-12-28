@@ -1,6 +1,7 @@
 export enum AppView {
-  INTAKE = 'INTAKE',
+  SENTIENT_GATEWAY = 'SENTIENT_GATEWAY', // Phase 2: "Enter the Light" gateway
   VOICE_INTRO = 'VOICE_INTRO', // Phase 2: Sentient onboarding
+  INTAKE = 'INTAKE', // Legacy: Clinical form intake (fallback)
   TRANSITION = 'TRANSITION',
   DASHBOARD = 'DASHBOARD',
   VOLUNTEER = 'VOLUNTEER',
@@ -55,7 +56,7 @@ export interface Task {
   category: 'LEGAL' | 'LOGISTICS' | 'FINANCIAL' | 'CEREMONY';
 }
 
-export type ServicePreference = 'SECULAR' | 'RELIGIOUS' | 'BRIEF';
+export type ServicePreference = 'SECULAR' | 'RELIGIOUS' | 'MILITARY' | 'CELEBRATION_OF_LIFE' | 'OTHER' | 'BRIEF';
 
 export interface ChatMessage {
   id: string;

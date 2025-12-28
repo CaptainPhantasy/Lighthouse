@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserState, DocumentScan, Task, ServicePreference } from '../types';
 import { TEXTS } from '../constants';
@@ -8,12 +8,13 @@ import DelegationHub from './DelegationHub';
 import TransportNavigator from './TransportNavigator';
 import ResolutionReport from './ResolutionReport';
 import SupportCircleDashboard from './SupportCircleDashboard';
+import SingleFocusMilestone from './SingleFocusMilestone';
 import { BentoGrid, BentoCard } from './ui/bento-grid';
 import { FloatingDock } from './ui/floating-dock';
 import { Tabs } from './ui/tabs';
 import ColourfulText from './ui/colourful-text';
 import ThemeToggle from './ThemeToggle';
-import { LayoutDashboard, FileText, HeartHandshake, AlertTriangle, Plane, Award, Users, Bell, Sparkles, Compass, CheckCircle2, Clock, TrendingUp, ArrowRight, X } from 'lucide-react';
+import { LayoutDashboard, FileText, HeartHandshake, AlertTriangle, Plane, Award, Users, Bell, Sparkles, Compass, CheckCircle2, Clock, TrendingUp, ArrowRight, X, Eye } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface DashboardProps {
@@ -407,6 +408,12 @@ const Dashboard: React.FC<DashboardProps> = ({
   const isDark = theme === 'dark';
   const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'TASKS' | 'VAULT' | 'ASSIST' | 'TRANSPORT' | 'RESOLUTION' | 'SUPPORT'>('OVERVIEW');
   const [toast, setToast] = useState<{ message: string; type?: 'info' | 'success' | 'warning'; actionLabel?: string; onAction?: () => void } | null>(null);
+  const [localTasks, setLocalTasks] = useState<Task[]>(tasks);
+
+  // Sync local tasks with props
+  useEffect(() => {
+    setLocalTasks(tasks);
+  }, [tasks]);
 
   const allTasksCompleted = tasks.length > 0 && tasks.every(task => task.status === 'COMPLETED');
 
@@ -441,6 +448,41 @@ const Dashboard: React.FC<DashboardProps> = ({
   const navItems = allNavItems.filter(item => visibleTabs.includes(item.id as any));
 
   const isTransportPriority = userState.deceasedLocation === 'OUT_OF_STATE' && !userState.deathPronounced;
+
+  // Phase 2: Single-Focus Mode for brain fog level 4-5
+  const isSingleFocusMode = userState.brainFogLevel >= 4;
+
+  const handleTaskComplete = (taskId: string) => {
+    setLocalTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'COMPLETED' as const } : t));
+  };
+
+  const handleViewFullDashboard = () => {
+    // Temporarily reduce brain fog level to show full dashboard
+    // In production, this could be a separate "view more" mode
+    setActiveTab('TASKS');
+  };
+
+  // Early return for Single-Focus mode
+  if (isSingleFocusMode && activeTab === 'OVERVIEW') {
+    return (
+      <div className={isDark ? 'bg-black' : 'bg-stone-50'}>
+        {/* Floating theme toggle for Single-Focus mode */}
+        <div className="fixed top-4 right-4 z-50">
+          <ThemeToggle variant="floating" />
+        </div>
+
+        <SingleFocusMilestone
+          tasks={localTasks}
+          userState={userState}
+          onTaskComplete={handleTaskComplete}
+          onTaskView={(taskId) => {
+            setActiveTab('TASKS');
+          }}
+          onNextStep={handleViewFullDashboard}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen ${isDark ? 'bg-black' : 'bg-stone-100'}`}>

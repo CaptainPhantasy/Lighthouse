@@ -156,8 +156,8 @@ export const streamChatResponse = async (
   onChunk: (text: string) => void,
   customSystemInstruction?: string
 ) => {
-  // Phase 2: Use gemini-3-flash for 3x faster response times (2025 standard)
-  const modelId = 'gemini-3-flash';
+  // Phase 2 Updated: Use stable 2025 models with proper fallback
+  const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
 
   // Use custom system instruction if provided, otherwise use default
   // Phase 2: Build with cached story context for persistent memory
@@ -166,56 +166,46 @@ export const streamChatResponse = async (
 
   const systemInstruction = buildSystemInstruction(baseInstruction);
 
-  try {
-    const chat = ai.chats.create({
-      model: modelId,
-      config: {
-        systemInstruction: systemInstruction,
-        tools: [{ googleSearch: {} }], // Enable grounding for current laws/info
-      },
-    });
-
-    const result = await chat.sendMessageStream({ message });
-
-    for await (const chunk of result) {
-      if (chunk.text) {
-        onChunk(chunk.text);
-      }
-    }
-  } catch (error) {
-    console.error("Chat Error:", error);
-    // Phase 2: Fallback to gemini-2.5-flash if gemini-3-flash unavailable
-    console.log('[Phase 2] Falling back to gemini-2.5-flash...');
+  // Try each model in sequence
+  for (const modelId of models) {
     try {
-      const fallbackChat = ai.chats.create({
-        model: 'gemini-2.5-flash',
+      console.log(`[Phase 2] Attempting chat with model: ${modelId}`);
+      const chat = ai.chats.create({
+        model: modelId,
         config: {
           systemInstruction: systemInstruction,
-          tools: [{ googleSearch: {} }],
+          tools: [{ googleSearch: {} }], // Enable grounding for current laws/info
         },
       });
-      const fallbackResult = await fallbackChat.sendMessageStream({ message });
-      for await (const chunk of fallbackResult) {
+
+      const result = await chat.sendMessageStream({ message });
+
+      for await (const chunk of result) {
         if (chunk.text) {
           onChunk(chunk.text);
         }
       }
-    } catch (fallbackError) {
-      console.error("Fallback also failed:", fallbackError);
-      onChunk("I'm having trouble connecting right now. Please try again.");
+      return; // Success, exit
+    } catch (error) {
+      console.error(`[Phase 2] Chat failed with ${modelId}:`, error);
+      continue; // Try next model
     }
   }
-};
+
+  // All models failed
+  console.error("[Phase 2] All chat models failed");
+  onChunk("I'm having trouble connecting right now. Please try again.");
+}
 
 // --- Vision Service (Smart Vault) ---
 
 export const analyzeDocument = async (base64Image: string, mimeType: string) => {
-  // Phase 2: Updated model hierarchy for 2025
+  // Phase 2 Updated: Use stable 2025 models with proper fallback
   const models = [
-    'gemini-3-flash',      // Primary: fastest with vision
-    'gemini-2.5-flash',     // Fallback 1: previous gen
-    'gemini-2.0-flash-exp', // Fallback 2: experimental
-    'gemini-1.5-flash'      // Fallback 3: stable
+    'gemini-2.0-flash',     // Primary: fastest with vision (2025 stable)
+    'gemini-1.5-flash',     // Fallback 1: stable vision model
+    'gemini-1.5-pro',       // Fallback 2: pro model with vision
+    'gemini-2.0-flash-exp', // Fallback 3: experimental (may not exist)
   ];
 
   const enhancedPrompt = `You are a document analysis expert for a bereavement support app. Analyze this image carefully.
@@ -330,8 +320,8 @@ Return ONLY this JSON structure:
 // --- Maps Service (Funeral Homes) ---
 
 export const findFuneralHomes = async (latitude: number, longitude: number) => {
-  // Phase 2: gemini-3-flash for faster Maps integration
-  const modelId = 'gemini-3-flash';
+  // Phase 2 Updated: Use stable 2025 models
+  const modelId = 'gemini-2.0-flash';
 
   try {
     const response = await ai.models.generateContent({
@@ -388,7 +378,7 @@ export async function deepResearchInterstateTransport(
     console.log(`[Phase 2] Deep Research: ${originLocation} → ${destinationLocation}`);
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro', // Use Pro model for deep research
+      model: 'gemini-1.5-pro', // Phase 2 Updated: Use stable Pro model
       contents: {
         parts: [{
           text: `You are a funeral logistics specialist researching interstate human remains transport.
@@ -455,9 +445,9 @@ export const connectLiveSession = async (
   onAudioData: (buffer: AudioBuffer) => void,
   onClose: () => void
 ) => {
-  // gemini-2.5-flash-preview-tts for Text-to-Speech (2025 SSOT standard)
-  // NOTE: As of Dec 2025, preview models may not be available. Falls back to gemini-2.0-flash-exp
-  const ttsModels = ['gemini-2.5-flash-preview-tts', 'gemini-2.0-flash-exp'];
+  // Phase 2 Updated: Use stable 2025 models with proper fallback
+  // gemini-2.0-flash is the latest stable model as of late 2024
+  const ttsModels = ['gemini-2.0-flash', 'gemini-1.5-flash'];
   const modelId = ttsModels[0];
   
   const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
@@ -534,8 +524,8 @@ export const connectLiveSession = async (
 
 // --- TTS Service (Eulogy Reader) ---
 export const generateSpeech = async (text: string): Promise<AudioBuffer | null> => {
-  // Try multiple TTS models in order of preference
-  const ttsModels = ['gemini-2.5-flash-preview-tts', 'gemini-2.0-flash-exp'];
+  // Phase 2 Updated: Use stable 2025 models with proper fallback
+  const ttsModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
 
   for (const modelId of ttsModels) {
     try {
@@ -575,7 +565,7 @@ export const generateSpeech = async (text: string): Promise<AudioBuffer | null> 
 export async function generateNotificationDraft(documentType: string, entities: any): Promise<{ text: string }> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash", // Phase 2: gemini-3-flash for general tasks
+      model: "gemini-2.0-flash", // Phase 2 Updated: Use stable 2025 model
       contents: [{
         parts: [{
           text: `Create a professional, empathetic notification letter for ${documentType} based on the extracted information.
@@ -618,7 +608,7 @@ export async function getLocalProbateRequirements(location: string): Promise<{
 }> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro", // Phase 2: gemini-3-pro for complex reasoning
+      model: "gemini-1.5-pro", // Phase 2 Updated: Use stable Pro model
       contents: [{
         parts: [{
           text: `I need local probate requirements for ${location}. Please provide:
@@ -687,6 +677,120 @@ The summary field MUST be optimized for Text-to-Speech: short sentences, clear p
   }
 }
 
+// ============================================================================
+// PHASE 2: DUAL-JURISDICTION ENGINE
+// ============================================================================
+
+/**
+ * Dual-Jurisdiction Probate Analysis
+ *
+ * When userLocation and deceasedLocation differ, runs two parallel reasoning threads:
+ * - Thread A: Probate laws where user is located
+ * - Thread B: Probate laws where deceased is located
+ *
+ * Returns: Synthesized overlap and guidance for interstate probate
+ */
+export interface DualJurisdictionProbateResult {
+  userJurisdiction: {
+    location: string;
+    requirements: string;
+    timeframe: string;
+    documents: string[];
+  };
+  deceasedJurisdiction: {
+    location: string;
+    requirements: string;
+    timeframe: string;
+    documents: string[];
+  };
+  overlap: {
+    sharedDocuments: string[];
+    conflictingRequirements: string[];
+    recommendedPath: string;
+  };
+  summary: string; // TTS-optimized
+}
+
+export async function getDualJurisdictionProbate(
+  userLocation: string,
+  deceasedLocation: string
+): Promise<DualJurisdictionProbateResult | null> {
+  // If same location, use single jurisdiction
+  if (userLocation.toLowerCase() === deceasedLocation.toLowerCase()) {
+    return null;
+  }
+
+  try {
+    console.log(`[Dual-Jurisdiction] Analyzing: ${userLocation} (user) ↔ ${deceasedLocation} (deceased)`);
+
+    const prompt = `You are a probate law specialist analyzing DUAL-JURISDICTION requirements for interstate probate.
+
+USER LOCATION: ${userLocation}
+DECEASED LOCATION: ${deceasedLocation}
+
+TASK: Run two parallel reasoning threads and synthesize:
+
+THREAD A - User Jurisdiction (${userLocation}):
+- Probate requirements for someone living in ${userLocation}
+- Filing requirements for out-of-state assets
+- Timeline expectations
+
+THREAD B - Deceased Jurisdiction (${deceasedLocation}):
+- Probate requirements where the deceased passed
+- Ancillary probate requirements
+- Timeline expectations
+
+SYNTHESIS - The Overlap:
+- Documents valid in both jurisdictions
+- Conflicting requirements (priority rules)
+- Recommended filing order (primary vs ancillary)
+- Whether "simplified probate" applies in either state
+
+CRITICAL: You MUST return ONLY valid JSON with this exact structure. No markdown, no code blocks.
+{
+  "userJurisdiction": {
+    "location": "user's state/county",
+    "requirements": "summary of probate requirements for user",
+    "timeframe": "expected timeline",
+    "documents": ["required doc 1", "required doc 2"]
+  },
+  "deceasedJurisdiction": {
+    "location": "deceased's state/county",
+    "requirements": "summary of probate requirements where deceased passed",
+    "timeframe": "expected timeline",
+    "documents": ["required doc 1", "required doc 2"]
+  },
+  "overlap": {
+    "sharedDocuments": ["doc valid in both", "another shared doc"],
+    "conflictingRequirements": ["requirement A vs B"],
+    "recommendedPath": "Step-by-step guidance on which jurisdiction to file in first, and how to coordinate between them"
+  },
+  "summary": "Short TTS-optimized summary. Use simple sentences. Each under 10 words. Speak directly. Example: File in the deceased's state first. Then file in your home state. Use the same death certificate. Your lawyer coordinates both filings."
+}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-pro',
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: 'application/json',
+        tools: [{ googleSearch: {} }],
+        temperature: 0.1,
+      }
+    });
+
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+      throw new Error('No response from AI');
+    }
+
+    const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+    return JSON.parse(cleaned);
+  } catch (e) {
+    console.error('[Dual-Jurisdiction] Analysis failed:', e);
+    return null;
+  }
+}
+
 export async function getTransportLaws(location: string): Promise<{
   faaRegulations: string;
   airlineRequirements: string;
@@ -696,7 +800,7 @@ export async function getTransportLaws(location: string): Promise<{
 }> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro", // Phase 2: gemini-3-pro for complex reasoning
+      model: "gemini-1.5-pro", // Phase 2 Updated: Use stable Pro model
       contents: [{ parts: [{ text: `
         I need current information about transporting human remains from ${location}. Please provide:
         1. FAA regulations for air transport of human remains
@@ -789,7 +893,7 @@ function extractPersonalInfo(documentScans: any[]): { fullName?: string; birthDa
 export async function generateSupportShareMessage(userName: string, deceasedName: string, supportLink: string): Promise<string> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash", // Phase 2: gemini-3-flash for general tasks
+      model: "gemini-2.0-flash", // Phase 2 Updated: Use stable 2025 model
       contents: [{
         parts: [{
           text: `Create a compassionate, warm message that ${userName} can send to friends and family to share a support link for arrangements related to ${deceasedName}'s passing.
@@ -954,7 +1058,7 @@ Important Instructions:
     ];
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash", // Phase 2: gemini-3-flash for general tasks
+      model: "gemini-2.0-flash", // Phase 2 Updated: Use stable 2025 model
       contents: conversation,
     });
 

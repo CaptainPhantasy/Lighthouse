@@ -1,10 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserState, Task, DocumentScan } from '../types';
-import { CheckCircle, FileText, Download, Shield, Trash2, Heart, AlertCircle, Sparkles, Feather, Lock, Gift } from 'lucide-react';
+import { CheckCircle, FileText, Download, Shield, Trash2, Heart, AlertCircle, Sparkles, Feather, Lock, Gift, FileDown, RotateCcw } from 'lucide-react';
 import { TEXTS } from '../constants';
 import { sanitizeData } from '../utils/encryption';
 import { useTheme } from '../contexts/ThemeContext';
+import {
+  downloadLanternPDF,
+  openLanternForPrint,
+  extractLanternDataFromUserState,
+  type LanternPDFData,
+} from '../services/lanternService';
+import {
+  performCompleteRestoration,
+  hasMemorial,
+  getMemorial as getMemorialData,
+  clearMemorial,
+  containsPII,
+} from '../utils/secureScrub';
 
 interface ResolutionReportProps {
   userState: UserState;
@@ -53,7 +66,20 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
   const [completedTasks, setCompletedTasks] = useState<CompletedTask[]>([]);
   const [documentRecords, setDocumentRecords] = useState<DocumentRecord[]>([]);
 
+  // Phase 2: Memorial state (for restoration complete)
+  const [memorialMode, setMemorialMode] = useState(false);
+  const [memorialData, setMemorialData] = useState<ReturnType<typeof getMemorialData> | null>(null);
+  const [lanternGenerating, setLanternGenerating] = useState(false);
+  const [showScrubConfirm, setShowScrubConfirm] = useState(false);
+
   useEffect(() => {
+    // Check for existing memorial (app has been restored)
+    const existingMemorial = getMemorialData();
+    if (existingMemorial) {
+      setMemorialMode(true);
+      setMemorialData(existingMemorial);
+    }
+
     // Filter completed tasks and format them
     const completed = tasks
       .filter(task => task.status === 'COMPLETED')
@@ -187,6 +213,55 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
     }
   };
 
+  // Phase 2: Lantern PDF Handlers
+  const handleDownloadLantern = () => {
+    setLanternGenerating(true);
+    try {
+      const lanternData = extractLanternDataFromUserState(userState, tasks, documentScans);
+      downloadLanternPDF(lanternData);
+    } catch (error) {
+      console.error('[Lantern] Failed to generate:', error);
+    } finally {
+      setTimeout(() => setLanternGenerating(false), 1000);
+    }
+  };
+
+  const handlePrintLantern = () => {
+    setLanternGenerating(true);
+    try {
+      const lanternData = extractLanternDataFromUserState(userState, tasks, documentScans);
+      openLanternForPrint(lanternData);
+    } catch (error) {
+      console.error('[Lantern] Failed to open for print:', error);
+    } finally {
+      setTimeout(() => setLanternGenerating(false), 1000);
+    }
+  };
+
+  // Phase 2: Secure Scrub - Complete Restoration Protocol
+  const handleSecureScrub = async () => {
+    if (!containsPII(userState)) {
+      alert('No personal information found to scrub.');
+      return;
+    }
+
+    setIsSanitizing(true);
+
+    // Perform complete restoration
+    const memorial = await performCompleteRestoration(userState);
+
+    // Update state to memorial mode
+    setMemorialMode(true);
+    setMemorialData(memorial);
+    setIsSanitizing(false);
+    setShowScrubConfirm(false);
+
+    // Notify parent if callback exists
+    if (onSanitizeData) {
+      onSanitizeData();
+    }
+  };
+
   const sanitizeAndDestroy = () => {
     if (confirm(TEXTS.legacy_subtitle + '\n\nThis will permanently delete all sensitive information while preserving your memories. Are you ready?')) {
       setIsSanitizing(true);
@@ -232,6 +307,65 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
             {tasks.filter(t => t.priority === 'HIGH' && t.status !== 'COMPLETED').length} HIGH tasks remaining
           </span>
         </div>
+      </motion.div>
+    );
+  }
+
+  // Phase 2: Memorial Mode - Display when restoration is complete
+  if (memorialMode && memorialData) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-2xl mx-auto p-6 text-center"
+      >
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ delay: 0.2, type: 'spring' }}
+          className={`inline-flex items-center justify-center w-24 h-24 ${isDark ? 'bg-stone-800' : 'bg-stone-100'} rounded-full mb-6`}
+        >
+          <Heart className={`w-12 h-12 ${isDark ? 'text-stone-400' : 'text-stone-600'}`} />
+        </motion.div>
+
+        <h1 className={`text-3xl font-bold mb-3 ${isDark ? 'text-white' : 'text-black'}`}>
+          Restoration Complete
+        </h1>
+
+        <p className={`${isDark ? 'text-stone-400' : 'text-stone-600'} mb-8 max-w-md mx-auto`}>
+          All personal information has been securely removed. The memory of {memorialData.deceasedName} has been honored and preserved.
+        </p>
+
+        <div className={`${isDark ? 'bg-stone-900 border-stone-800' : 'bg-stone-50 border-stone-200'} border rounded-2xl p-6 mb-6`}>
+          <p className={`text-sm ${isDark ? 'text-stone-500' : 'text-stone-500'} mb-2`}>Completed</p>
+          <p className={`text-lg ${isDark ? 'text-white' : 'text-black'}`}>{memorialData.completionDate}</p>
+        </div>
+
+        {memorialData.memorialMessage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className={`${isDark ? 'bg-stone-900 border-stone-800' : 'bg-stone-50 border-stone-200'} border rounded-2xl p-6 mb-6`}
+          >
+            <p className={`italic ${isDark ? 'text-stone-300' : 'text-stone-700'}`}>
+              {memorialData.memorialMessage}
+            </p>
+          </motion.div>
+        )}
+
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => {
+            clearMemorial();
+            setMemorialMode(false);
+            setMemorialData(null);
+          }}
+          className={`${isDark ? 'bg-stone-800 text-stone-300 hover:bg-stone-700' : 'bg-stone-200 text-stone-700 hover:bg-stone-300'} px-6 py-3 rounded-xl font-medium transition-colors`}
+        >
+          Close Memorial
+        </motion.button>
       </motion.div>
     );
   }
@@ -325,6 +459,48 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
         </div>
       </motion.div>
 
+      {/* Phase 2: Lantern PDF - The Logistical Ledger */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.45 }}
+        className={`${isDark ? 'bg-stone-900 border-stone-800' : 'bg-stone-100 border-stone-200'} border-2 rounded-2xl p-6 mb-8`}
+      >
+        <div className="flex items-start gap-4">
+          <div className={`${isDark ? 'bg-stone-800' : 'bg-stone-200'} p-4 rounded-xl`}>
+            <FileDown className={`w-8 h-8 ${isDark ? 'text-stone-400' : 'text-stone-700'}`} />
+          </div>
+          <div className="flex-1">
+            <h3 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-black'}`}>The Lantern - Logistical Ledger</h3>
+            <p className={`${isDark ? 'text-stone-400 mb-4' : 'text-black mb-4'}`}>
+              Generate a formal document to share with funeral directors, airlines, banks, and financial institutions. Removes the burden of explaining everything repeatedly.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleDownloadLantern}
+                disabled={lanternGenerating}
+                className={`${isDark ? 'bg-stone-700 hover:bg-stone-600' : 'bg-black hover:bg-stone-800'} text-white px-5 py-2.5 rounded-xl font-medium shadow-md flex items-center gap-2 disabled:opacity-50`}
+              >
+                <Download className="w-4 h-4" />
+                {lanternGenerating ? 'Generating...' : 'Download Lantern'}
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handlePrintLantern}
+                disabled={lanternGenerating}
+                className={`${isDark ? 'bg-stone-800 text-stone-300 hover:bg-stone-700' : 'bg-stone-200 text-stone-700 hover:bg-stone-300'} px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 disabled:opacity-50`}
+              >
+                <FileText className="w-4 h-4" />
+                Print / Save as PDF
+              </motion.button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row gap-4 mb-8">
         <motion.button
@@ -339,12 +515,12 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
-          onClick={sanitizeAndDestroy}
+          onClick={() => setShowScrubConfirm(true)}
           disabled={isSanitizing}
           className={`flex-1 ${isDark ? 'bg-stone-700 hover:bg-stone-600' : 'bg-black hover:bg-stone-800'} text-white py-3 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-md disabled:opacity-50`}
         >
-          <Shield className="w-5 h-5" />
-          {isSanitizing ? 'Securing...' : 'Securely Complete Journey'}
+          <RotateCcw className="w-5 h-5" />
+          {isSanitizing ? 'Restoring...' : 'Complete Restoration'}
         </motion.button>
       </div>
 
@@ -458,6 +634,96 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
               <p className={`text-xs mt-4 text-center flex items-center justify-center gap-1 ${isDark ? 'text-stone-500' : 'text-gray-700'}`}>
                 <Lock className="w-3 h-3" />
                 Your data remains private and secure
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Phase 2: Secure Scrub Confirmation Modal */}
+      <AnimatePresence>
+        {showScrubConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowScrubConfirm(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className={`${isDark ? 'bg-stone-900' : 'bg-white'} rounded-2xl max-w-lg w-full p-6 shadow-2xl`}
+            >
+              <div className="text-center mb-6">
+                <div className={`${isDark ? 'bg-red-900/30' : 'bg-red-50'} w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4`}>
+                  <Shield className={`w-8 h-8 ${isDark ? 'text-red-400' : 'text-red-600'}`} />
+                </div>
+                <h3 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>Complete Restoration</h3>
+                <p className={`text-sm ${isDark ? 'text-stone-400' : 'text-gray-800'}`}>
+                  This will permanently remove all personal information from your device.
+                </p>
+              </div>
+
+              <div className={`${isDark ? 'bg-stone-800 border-stone-700' : 'bg-stone-50 border-stone-200'} border rounded-xl p-4 mb-6`}>
+                <h4 className={`text-sm font-semibold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>What will be deleted:</h4>
+                <ul className={`text-sm space-y-2 ${isDark ? 'text-stone-400' : 'text-gray-700'}`}>
+                  <li className="flex items-center gap-2">
+                    <Trash2 className="w-4 h-4 text-red-500" />
+                    Your name and relationship
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Trash2 className="w-4 h-4 text-red-500" />
+                    Deceased information and location
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Trash2 className="w-4 h-4 text-red-500" />
+                    All document scans (encrypted and decrypted)
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Trash2 className="w-4 h-4 text-red-500" />
+                    Tasks and milestones
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Trash2 className="w-4 h-4 text-red-500" />
+                    Your story transcript and conversations
+                  </li>
+                </ul>
+
+                <div className={`mt-4 pt-4 border-t ${isDark ? 'border-stone-700' : 'border-stone-200'}`}>
+                  <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-green-400' : 'text-green-700'}`}>What will remain:</h4>
+                  <p className={`text-sm ${isDark ? 'text-stone-400' : 'text-gray-700'}`}>
+                    A memorial entry showing the completion date and honoring their memory.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleSecureScrub}
+                  disabled={isSanitizing}
+                  className={`flex-1 ${isDark ? 'bg-red-900/50 hover:bg-red-900/70 text-red-200' : 'bg-red-600 hover:bg-red-700 text-white'} py-3 rounded-xl font-medium flex items-center justify-center gap-2 disabled:opacity-50`}
+                >
+                  <Shield className="w-4 h-4" />
+                  {isSanitizing ? 'Securing...' : 'Complete Restoration'}
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowScrubConfirm(false)}
+                  className={`px-6 py-3 ${isDark ? 'bg-stone-800 text-stone-300 hover:bg-stone-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} rounded-xl font-medium transition-colors`}
+                >
+                  Cancel
+                </motion.button>
+              </div>
+
+              <p className={`text-xs mt-4 text-center flex items-center justify-center gap-1 ${isDark ? 'text-stone-500' : 'text-gray-500'}`}>
+                <Lock className="w-3 h-3" />
+                This action cannot be undone
               </p>
             </motion.div>
           </motion.div>

@@ -4,19 +4,26 @@ import TransitionView from './components/TransitionView';
 import Dashboard from './components/Dashboard';
 import SplashScreen from './components/SplashScreen';
 import VolunteerPage from './components/VolunteerPage';
+import SentientGateway from './components/onboarding/SentientGateway';
+import VoiceIntro from './components/onboarding/VoiceIntro';
 import { AppView, UserState, DocumentScan, Task, ServicePreference } from './types';
 import { INITIAL_USER_STATE } from './constants';
 import { isEncrypted, decryptObject, encryptObject, sanitizeData } from './utils/encryption';
 import { ENCRYPTION_PASSWORD } from './constants';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { type NarrativeCheckpoint } from './hooks/useCheckpointedNarrative';
 
 const AppContent: React.FC = () => {
   const [splashScreenVisible, setSplashScreenVisible] = useState(true);
-  const [view, setView] = useState<AppView>(AppView.INTAKE);
+  const [view, setView] = useState<AppView>(AppView.SENTIENT_GATEWAY); // Phase 2: Start with Sentient Gateway
   const [userState, setUserState] = useState<UserState>(INITIAL_USER_STATE);
   const [documentScans, setDocumentScans] = useState<DocumentScan[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [volunteerRequestId, setVolunteerRequestId] = useState<string | null>(null);
+
+  // Phase 2: Sentient onboarding state
+  const [voiceMode, setVoiceMode] = useState<'voice' | 'discretion'>('voice');
+  const [restoredCheckpoint, setRestoredCheckpoint] = useState<NarrativeCheckpoint | undefined>(undefined);
 
   // Check for Volunteer URL on mount
   useEffect(() => {
@@ -32,6 +39,25 @@ const AppContent: React.FC = () => {
       }
     }
   }, []);
+
+  // Phase 2: Check for narrative checkpoint on mount
+  useEffect(() => {
+    if (view !== AppView.SENTIENT_GATEWAY) return;
+
+    try {
+      const savedCheckpoint = localStorage.getItem('lighthouse_narrative_checkpoint');
+      if (savedCheckpoint) {
+        const checkpoint = JSON.parse(savedCheckpoint) as NarrativeCheckpoint;
+        // Only restore if less than 24 hours old
+        const age = Date.now() - (checkpoint as any).lastUpdate;
+        if (age < 24 * 60 * 60 * 1000) {
+          setRestoredCheckpoint(checkpoint);
+        }
+      }
+    } catch (e) {
+      console.error('[App] Failed to load checkpoint:', e);
+    }
+  }, [view]);
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -206,6 +232,33 @@ const AppContent: React.FC = () => {
     localStorage.setItem('serviceOutline', outline);
   };
 
+  // Phase 2: Sentient onboarding handlers
+  const handleGatewayEnter = (mode: 'voice' | 'discretion') => {
+    setVoiceMode(mode);
+    setView(AppView.VOICE_INTRO);
+  };
+
+  const handleResumeCheckpoint = () => {
+    setRestoredCheckpoint(restoredCheckpoint);
+    setView(AppView.VOICE_INTRO);
+  };
+
+  const handleVoiceIntroComplete = (data: Partial<UserState>) => {
+    // Merge with initial state for any missing fields
+    const mergedData: UserState = {
+      ...INITIAL_USER_STATE,
+      ...data,
+      servicePreference: 'SECULAR',
+    } as UserState;
+
+    setUserState(mergedData);
+    setView(AppView.TRANSITION);
+    localStorage.setItem('lighthouse_view', AppView.TRANSITION);
+
+    // Clear the checkpoint after successful completion
+    localStorage.removeItem('lighthouse_narrative_checkpoint');
+  };
+
   return (
     <>
       {splashScreenVisible && (
@@ -216,7 +269,19 @@ const AppContent: React.FC = () => {
 
       {!splashScreenVisible && (
         <>
-          {view === AppView.INTAKE ? (
+          {view === AppView.SENTIENT_GATEWAY ? (
+            <SentientGateway
+              onEnter={handleGatewayEnter}
+              hasCheckpoint={!!restoredCheckpoint}
+              onResumeCheckpoint={handleResumeCheckpoint}
+            />
+          ) : view === AppView.VOICE_INTRO ? (
+            <VoiceIntro
+              mode={voiceMode}
+              restoredCheckpoint={restoredCheckpoint}
+              onComplete={handleVoiceIntroComplete}
+            />
+          ) : view === AppView.INTAKE ? (
             <IntakeFlow onComplete={handleIntakeComplete} />
           ) : view === AppView.TRANSITION ? (
             <TransitionView

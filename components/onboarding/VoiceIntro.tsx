@@ -1,8 +1,16 @@
 /**
- * Phase 2: Sentient Onboarding - VoiceIntro
+ * Phase 2: Sentient Onboarding - VoiceIntro (v2.0)
  *
- * A zero-friction, voice-first onboarding experience.
- * No buttons. No forms. Just a breathing light and a listening presence.
+ * A zero-friction, sentient onboarding experience.
+ * The app transforms from a tool to a companion.
+ *
+ * Features:
+ * - Voice-first with discretion (text-only) fallback
+ * - Checkpointed narrative system (auto-saves every 10s)
+ * - Smart entity extraction with ambiguity detection
+ * - "I'm still here" resume after crash/refresh
+ * - Haptic empathy (navigator.vibrate)
+ * - Mobile-safe audio handling
  *
  * The AI silently extracts:
  * - userName, deceasedName, relationship
@@ -16,9 +24,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import useSpeechToText from '@/hooks/useSpeechToText';
 import useTextToSpeech from '@/hooks/useTextToSpeech';
+import { useCheckpointedNarrative, type NarrativeCheckpoint } from '@/hooks/useCheckpointedNarrative';
 import { setStoryContext } from '@/services/geminiService';
 import { UserState, WishesKnowledgeLevel } from '@/types';
-import { deepResearchInterstateTransport, DeepResearchItinerary } from '@/services/geminiService';
+import { deepResearchInterstateTransport } from '@/services/geminiService';
+import { Send, Mic } from 'lucide-react';
 
 // ============================================================================
 // TYPES
@@ -26,6 +36,8 @@ import { deepResearchInterstateTransport, DeepResearchItinerary } from '@/servic
 
 interface VoiceIntroProps {
   onComplete: (userState: Partial<UserState>) => void;
+  mode: 'voice' | 'discretion'; // From SentientGateway
+  restoredCheckpoint?: NarrativeCheckpoint;
 }
 
 interface ExtractedInfo {
@@ -35,31 +47,51 @@ interface ExtractedInfo {
   userLocation?: string;
   deceasedLocation?: string;
   wishesKnowledgeLevel?: WishesKnowledgeLevel;
+  isAmbiguous?: boolean; // For Implicit Extraction Trap
 }
 
 // ============================================================================
-// BREATHING ANIMATION CONFIGURATION
+// CONSTANTS
 // ============================================================================
 
 const BREATH_CYCLE_DURATION = 4000; // 4 seconds per breath - slow, calming
-const STONE_200_LIGHT = '#d6d3d4';  // Light mode
-const STONE_200_DARK = '#292524';   // Dark mode
+const SILENCE_THRESHOLD = 5000; // 5 seconds before gentle nudge
+const MAX_CONVERSATION_TURNS = 5; // Prevent infinite loops
 
 // ============================================================================
 // SENTIENT ONBOARDING COMPONENT
 // ============================================================================
 
-export default function VoiceIntro({ onComplete }: VoiceIntroProps) {
+export default function VoiceIntro({ onComplete, mode, restoredCheckpoint }: VoiceIntroProps) {
   // State
   const [aiResponse, setAiResponse] = useState('');
-  const [userTranscript, setUserTranscript] = useState('');
+  const [currentTranscript, setCurrentTranscript] = useState('');
   const [extractedInfo, setExtractedInfo] = useState<ExtractedInfo>({});
   const [hasStarted, setHasStarted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [textInput, setTextInput] = useState('');
 
   // Refs
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const conversationTurnRef = useRef(0);
+  const lastTranscriptTimeRef = useRef(Date.now());
+
+  // Checkpointed narrative hook
+  const {
+    userTranscript,
+    aiResponses,
+    isAutoSaving,
+    addUserSpeech,
+    addAiResponse,
+    updateExtractedInfo,
+    getResumeGreeting,
+  } = useCheckpointedNarrative({
+    autoSave: true,
+    initialCheckpoint: restoredCheckpoint,
+    onRestore: (checkpoint) => {
+      setExtractedInfo(checkpoint.extractedInfo);
+    },
+  });
 
   // Speech hooks
   const {
@@ -68,18 +100,47 @@ export default function VoiceIntro({ onComplete }: VoiceIntroProps) {
     error,
     startListening,
     stopListening,
-    browserSupportsSpeechRecognition
+    browserSupportsSpeechRecognition,
   } = useSpeechToText();
 
   const {
     speak,
     stop: stopSpeaking,
     isSpeaking,
-    isSupported: ttsSupported
+    isSupported: ttsSupported,
   } = useTextToSpeech();
 
+  // Determine if we're using voice or text mode
+  const isVoiceMode = mode === 'voice' && browserSupportsSpeechRecognition;
+
   // ============================================================================
-  // GREETING - The Handshake
+  // RESTORE CHECKPOINT ON MOUNT
+  // ============================================================================
+
+  useEffect(() => {
+    if (restoredCheckpoint) {
+      setExtractedInfo(restoredCheckpoint.extractedInfo);
+      conversationTurnRef.current = 2; // Skip initial greeting
+      setHasStarted(true);
+
+      // getResumeGreeting() now works synchronously because hook uses lazy initialization
+      const greeting = getResumeGreeting();
+      setAiResponse(greeting);
+
+      if (ttsSupported && isVoiceMode) {
+        speak(greeting).then(() => {
+          if (isVoiceMode) {
+            startListening();
+          }
+        });
+      } else if (isVoiceMode) {
+        startListening();
+      }
+    }
+  }, [restoredCheckpoint, getResumeGreeting, ttsSupported, isVoiceMode, speak, startListening]);
+
+  // ============================================================================
+  // INITIAL GREETING (if not restored)
   // ============================================================================
 
   const GREETING = `I'm Lighthouse. I'm here.
@@ -88,60 +149,75 @@ Tell me a bit about what's happening, who you lost, and where you are right now.
 
 Take your time. I'm listening.`;
 
-  // Speak the greeting on mount
   useEffect(() => {
-    if (ttsSupported && !hasStarted) {
-      speak(GREETING).then(() => {
+    if (!hasStarted && !restoredCheckpoint) {
+      if (ttsSupported && isVoiceMode) {
+        speak(GREETING).then(() => {
+          setHasStarted(true);
+          setAiResponse(GREETING);
+          setTimeout(() => {
+            startListening();
+          }, 1000);
+        });
+      } else {
+        setAiResponse(GREETING);
         setHasStarted(true);
-        // Start listening after greeting
-        setTimeout(() => {
+        if (isVoiceMode) {
           startListening();
-        }, 1000);
-      });
-    } else if (!ttsSupported && !hasStarted) {
-      // Fallback: show greeting text and start listening
-      setAiResponse(GREETING);
-      setHasStarted(true);
-      startListening();
+        }
+      }
     }
 
     return () => {
       stopSpeaking();
       stopListening();
     };
-  }, []);
+  }, [hasStarted, restoredCheckpoint]);
 
   // ============================================================================
-  // ENTITY EXTRACTION - Silent Analysis via gemini-3-flash
+  // ENTITY EXTRACTION - Smart with Ambiguity Detection
   // ============================================================================
 
-  const extractEntities = useCallback(async (text: string): Promise<ExtractedInfo> => {
-    const extractionPrompt = `Extract information from this text. Return ONLY valid JSON:
+  const extractEntities = useCallback(async (text: string, context: string): Promise<ExtractedInfo> => {
+    const extractionPrompt = `You are extracting information from a grieving person sharing their story.
+Extract entities and identify location ambiguity.
 
-Text: "${text}"
+TEXT: "${text}"
+CONTEXT: "${context}"
 
-Return format:
+CRITICAL RULES:
+1. Distinguish between userLocation (where user IS) and deceasedLocation (where deceased IS)
+2. If text says "I'm in Florida" -> userLocation = "Florida"
+3. If text says "Mark is in Oregon" -> deceasedLocation = "Oregon"
+4. If locations are ambiguous (e.g., "We're in Florida" - unclear if both are there), return isAmbiguous = true
+5. wishesKnowledgeLevel: "NONE" (no wishes discussed), "VAGUE" (mentioned some ideas), "CLEAR" (written/final wishes mentioned)
+
+Return ONLY valid JSON:
 {
   "userName": "user's name or null",
   "deceasedName": "deceased person's name or null",
   "relationship": "spouse/child/parent/sibling/friend/other or null",
   "userLocation": "city, state where user is or null",
-  "deceasedLocation": "where deceased is located (home/hospital/city/state) or null",
-  "wishesKnowledgeLevel": "NONE" (no wishes known), "VAGUE" (some ideas), "CLEAR" (written/final wishes) or null
+  "deceasedLocation": "where deceased is located or null",
+  "wishesKnowledgeLevel": "NONE/VAGUE/CLEAR or null",
+  "isAmbiguous": true/false (if locations unclear)
 }`;
 
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: extractionPrompt }] }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.1,
-          }
-        })
-      });
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: extractionPrompt }] }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.1,
+            },
+          }),
+        }
+      );
 
       const data = await response.json();
       const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -159,40 +235,58 @@ Return format:
   // AI RESPONSE HANDLER
   // ============================================================================
 
-  const handleAiResponse = useCallback(async (responseText: string) => {
-    setAiResponse(responseText);
-    stopListening();
+  const handleAiResponse = useCallback(
+    async (responseText: string) => {
+      setAiResponse(responseText);
+      addAiResponse(responseText);
 
-    if (ttsSupported) {
-      await speak(responseText);
-    }
+      if (isVoiceMode) {
+        stopListening();
+      }
 
-    // Check if we have required info
-    const hasRequired =
-      extractedInfo.userName &&
-      extractedInfo.deceasedName &&
-      extractedInfo.relationship &&
-      extractedInfo.userLocation;
+      // Haptic empathy pulse: Single gentle tap when AI responds
+      // Provides physical anchor for processing complex logic
+      if ('vibrate' in navigator) {
+        navigator.vibrate(30);
+      }
 
-    if (hasRequired) {
-      // Complete onboarding after a brief pause
-      setTimeout(() => {
-        completeOnboarding();
-      }, 1500);
-    } else {
-      // Resume listening
-      setTimeout(() => {
-        startListening();
-      }, 500);
-    }
-  }, [extractedInfo, speak, startListening, stopListening, ttsSupported]);
+      if (ttsSupported && isVoiceMode) {
+        await speak(responseText);
+      }
+
+      // Check if we have required info
+      const hasRequired =
+        extractedInfo.userName &&
+        extractedInfo.deceasedName &&
+        extractedInfo.relationship &&
+        extractedInfo.userLocation;
+
+      // Check for ambiguity - resolve before completing
+      const hasAmbiguity = extractedInfo.isAmbiguous && !extractedInfo.deceasedLocation;
+
+      if (hasRequired && !hasAmbiguity) {
+        // Complete onboarding after a brief pause
+        setTimeout(() => {
+          completeOnboarding();
+        }, 1500);
+      } else {
+        // Resume listening (or show text input)
+        setTimeout(() => {
+          if (isVoiceMode) {
+            startListening();
+          }
+        }, 500);
+      }
+    },
+    [extractedInfo, speak, startListening, stopListening, ttsSupported, isVoiceMode, addAiResponse]
+  );
 
   // ============================================================================
   // COMPLETE ONBOARDING
   // ============================================================================
 
   const completeOnboarding = useCallback(async () => {
-    const fullTranscript = `User: ${userTranscript}\n\nLighthouse: ${aiResponse}`;
+    const fullTranscript = `User: ${userTranscript}\n\nLighthouse: ${aiResponses.join('\n\n')}`;
 
     const userState: Partial<UserState> = {
       name: extractedInfo.userName || '',
@@ -208,7 +302,7 @@ Return format:
       brainFogLevel: assessBrainFog(userTranscript),
     };
 
-    // Cache story context
+    // Cache story context for all future AI sessions
     setStoryContext(fullTranscript);
 
     // Check for interstate scenario
@@ -217,42 +311,74 @@ Return format:
 
       if (isInterstate) {
         console.log('[VoiceIntro] Interstate detected - Deep Research initiated');
-        const itinerary = await deepResearchInterstateTransport(
-          extractedInfo.userLocation,
-          extractedInfo.deceasedLocation
-        );
-        if (itinerary) {
-          (userState as any).interstateItinerary = itinerary;
+        try {
+          const itinerary = await deepResearchInterstateTransport(
+            extractedInfo.userLocation,
+            extractedInfo.deceasedLocation
+          );
+          if (itinerary) {
+            (userState as any).interstateItinerary = itinerary;
+          }
+        } catch (e) {
+          console.error('[VoiceIntro] Deep research failed:', e);
         }
       }
     }
 
+    // Stop any ongoing speech/listening
+    stopSpeaking();
+    if (isVoiceMode) {
+      stopListening();
+    }
+
     onComplete(userState);
-  }, [extractedInfo, userTranscript, aiResponse, onComplete]);
+  }, [
+    extractedInfo,
+    userTranscript,
+    aiResponses,
+    onComplete,
+    stopSpeaking,
+    isVoiceMode,
+    stopListening,
+  ]);
 
   // ============================================================================
-  // PROCESS FINAL TRANSCRIPTS
+  // PROCESS VOICE TRANSCRIPTS
   // ============================================================================
 
   useEffect(() => {
-    if (!isListening && transcript && !isProcessing) {
+    if (!isListening && transcript && !isProcessing && isVoiceMode) {
       setIsProcessing(true);
 
-      // Save transcript
-      setUserTranscript(prev => prev + (prev ? ' ' : '') + transcript);
+      // Save to checkpointed narrative
+      addUserSpeech(transcript);
+      setCurrentTranscript(transcript);
 
-      // Extract entities
-      extractEntities(transcript).then(newInfo => {
-        setExtractedInfo(prev => ({ ...prev, ...newInfo }));
+      // Extract entities with context
+      extractEntities(transcript, userTranscript).then((newInfo) => {
+        setExtractedInfo((prev) => {
+          const merged = { ...prev, ...newInfo };
+          // Update checkpoint
+          updateExtractedInfo(merged);
+          return merged;
+        });
         conversationTurnRef.current++;
 
         // Determine AI response
         const missing = getMissingInfo({ ...extractedInfo, ...newInfo });
         const turn = conversationTurnRef.current;
+        const isAmbiguous = newInfo.isAmbiguous;
 
         let responseText = '';
-        if (missing.length === 0) {
+
+        if (isAmbiguous && !newInfo.deceasedLocation && newInfo.userLocation) {
+          // Implicit Extraction Trap: Ask clarifying question
+          responseText = `Thank you for sharing. Just to make sure I understand — are you both in ${newInfo.userLocation}, or are they somewhere else?`;
+        } else if (missing.length === 0) {
           responseText = `Thank you for sharing that with me. I understand you're ${newInfo.relationship} to ${newInfo.deceasedName}, and you're in ${newInfo.userLocation}. I'm ready to help you through this. Take a breath.`;
+        } else if (turn >= MAX_CONVERSATION_TURNS) {
+          // Max turns reached - proceed with what we have
+          responseText = 'Thank you. I have enough to get started. Let me help you.';
         } else if (turn >= 2) {
           // Gentle nudge for missing info
           responseText = `I appreciate you sharing that. ${getNudgeText(missing)}`;
@@ -271,27 +397,79 @@ Return format:
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
       }
-      // Reset silence detection
       lastTranscriptTimeRef.current = Date.now();
     }
-  }, [isListening, transcript, isProcessing, extractedInfo, extractEntities, handleAiResponse]);
+  }, [
+    isListening,
+    transcript,
+    isProcessing,
+    extractedInfo,
+    extractEntities,
+    handleAiResponse,
+    userTranscript,
+    addUserSpeech,
+    updateExtractedInfo,
+    isVoiceMode,
+  ]);
 
   // ============================================================================
-  // SILENCE DETECTION (5 seconds)
+  // PROCESS TEXT INPUT (Discretion Mode)
   // ============================================================================
 
-  const lastTranscriptTimeRef = useRef(Date.now());
+  const handleTextInput = useCallback(async () => {
+    if (!textInput.trim()) return;
+
+    const text = textInput.trim();
+    setTextInput('');
+    addUserSpeech(text);
+    setCurrentTranscript(text);
+    setIsProcessing(true);
+
+    // Extract entities with context
+    const newInfo = await extractEntities(text, userTranscript);
+    setExtractedInfo((prev) => {
+      const merged = { ...prev, ...newInfo };
+      updateExtractedInfo(merged);
+      return merged;
+    });
+    conversationTurnRef.current++;
+
+    // Determine AI response
+    const missing = getMissingInfo({ ...extractedInfo, ...newInfo });
+    const turn = conversationTurnRef.current;
+    const isAmbiguous = newInfo.isAmbiguous;
+
+    let responseText = '';
+
+    if (isAmbiguous && !newInfo.deceasedLocation && newInfo.userLocation) {
+      responseText = `Thank you for sharing. Just to be sure — are you both in ${newInfo.userLocation}, or are they somewhere else?`;
+    } else if (missing.length === 0) {
+      responseText = `Thank you. I understand you're ${newInfo.relationship} to ${newInfo.deceasedName}. I'm ready to help you through this.`;
+    } else if (turn >= MAX_CONVERSATION_TURNS) {
+      responseText = 'Thank you. I have enough to get started.';
+    } else if (turn >= 2) {
+      responseText = `I appreciate you sharing that. ${getNudgeText(missing)}`;
+    } else {
+      responseText = 'Thank you. Please continue when you are ready.';
+    }
+
+    await handleAiResponse(responseText);
+    setIsProcessing(false);
+  }, [textInput, extractedInfo, userTranscript, extractEntities, addUserSpeech, updateExtractedInfo, handleAiResponse]);
+
+  // ============================================================================
+  // SILENCE DETECTION (5 seconds) - Voice mode only
+  // ============================================================================
 
   useEffect(() => {
-    if (!isListening || !hasStarted || isSpeaking) return;
+    if (!isVoiceMode || !isListening || !hasStarted || isSpeaking) return;
 
     silenceTimerRef.current = setInterval(() => {
       const timeSinceLastSpeech = Date.now() - lastTranscriptTimeRef.current;
 
-      if (timeSinceLastSpeech > 5000 && !aiResponse) {
-        // 5 seconds of silence - gentle nudge
+      if (timeSinceLastSpeech > SILENCE_THRESHOLD && !aiResponse) {
         const missing = getMissingInfo(extractedInfo);
-        if (missing.length > 0 && conversationTurnRef.current < 3) {
+        if (missing.length > 0 && conversationTurnRef.current < MAX_CONVERSATION_TURNS) {
           handleAiResponse(`I'm still here. Whenever you're ready${missing.includes('deceased') ? ' - who did you lose?' : ''}.`);
           clearInterval(silenceTimerRef.current!);
         }
@@ -303,7 +481,7 @@ Return format:
         clearInterval(silenceTimerRef.current);
       }
     };
-  }, [isListening, hasStarted, isSpeaking, aiResponse, extractedInfo, handleAiResponse]);
+  }, [isListening, hasStarted, isSpeaking, aiResponse, extractedInfo, handleAiResponse, isVoiceMode]);
 
   // ============================================================================
   // RENDER
@@ -311,8 +489,8 @@ Return format:
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black">
-      <div className="flex flex-col items-center gap-16 px-8">
-        {/* Breathing Light - Stone-200 */}
+      <div className="flex flex-col items-center gap-16 px-8 max-w-lg w-full">
+        {/* Breathing Light */}
         <div className="relative">
           {/* Outer glow ring */}
           {isListening && (
@@ -337,10 +515,17 @@ Return format:
             style={{
               backgroundColor: 'var(--stone-200, #d6d3d4)',
             }}
-            animate={{
-              scale: [1, 1.15, 1],
-              opacity: [0.7, 1, 0.7],
-            }}
+            animate={
+              isListening || isProcessing
+                ? {
+                    scale: [1, 1.15, 1],
+                    opacity: [0.7, 1, 0.7],
+                  }
+                : {
+                    scale: [1, 1.05, 1],
+                    opacity: [0.5, 0.7, 0.5],
+                  }
+            }
             transition={{
               duration: BREATH_CYCLE_DURATION / 1000,
               repeat: Infinity,
@@ -357,7 +542,7 @@ Return format:
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="max-w-lg text-center"
+              className="w-full text-center"
             >
               <p className="text-stone-800 dark:text-stone-200 text-xl leading-relaxed font-light">
                 {aiResponse}
@@ -366,32 +551,65 @@ Return format:
           )}
         </AnimatePresence>
 
-        {/* Live Transcript (subtle) */}
-        {transcript && !aiResponse && (
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.5 }}
-            className="text-stone-400 dark:text-stone-500 text-base italic max-w-md text-center"
-          >
-            "{transcript}"
-          </motion.p>
+        {/* Live Transcript (voice mode) or Text Input (discretion mode) */}
+        {isVoiceMode ? (
+          // Voice mode: show live transcript
+          transcript && !aiResponse && (
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              className="text-stone-400 dark:text-stone-500 text-base italic max-w-md text-center"
+            >
+              "{transcript}"
+            </motion.p>
+          )
+        ) : (
+          // Discretion mode: text input
+          <div className="w-full max-w-md">
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && !isProcessing && handleTextInput()}
+                placeholder="Share what's happening..."
+                disabled={isProcessing}
+                className="flex-1 px-4 py-3 bg-stone-100 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl text-stone-800 dark:text-stone-200 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-300 dark:focus:ring-stone-700 disabled:opacity-50"
+              />
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={handleTextInput}
+                disabled={isProcessing || !textInput.trim()}
+                className="px-4 py-3 bg-black dark:bg-stone-800 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Send className="w-5 h-5" />
+              </motion.button>
+            </div>
+          </div>
         )}
 
-        {/* Status Indicator */}
-        <div className="flex items-center gap-2 text-stone-400 dark:text-stone-500">
-          {isListening && (
-            <>
+        {/* Status Indicators */}
+        <div className="flex items-center gap-4 text-stone-400 dark:text-stone-500 text-sm">
+          {/* Listening status */}
+          {isVoiceMode && isListening && (
+            <div className="flex items-center gap-2">
               <motion.span
                 className="w-2 h-2 bg-stone-400 dark:bg-stone-600 rounded-full"
                 animate={{ scale: [1, 1.5, 1] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
               />
-              <span className="text-sm">Listening...</span>
-            </>
+              <span>Listening...</span>
+            </div>
           )}
-          {isSpeaking && (
-            <span className="text-sm">Speaking...</span>
-          )}
+
+          {/* Speaking status */}
+          {isSpeaking && <span>Speaking...</span>}
+
+          {/* Processing status */}
+          {isProcessing && <span>Thinking...</span>}
+
+          {/* Auto-save indicator */}
+          {isAutoSaving && <span>Saving...</span>}
         </div>
 
         {/* Error fallback */}
@@ -402,11 +620,13 @@ Return format:
             </p>
             <button
               onClick={() => {
-                const text = prompt("Please share: Your name, who you lost, and your location.");
+                const text = prompt('Please share: Your name, who you lost, and your location.');
                 if (text) {
-                  setUserTranscript(text);
-                  extractEntities(text).then(newInfo => {
+                  addUserSpeech(text);
+                  setCurrentTranscript(text);
+                  extractEntities(text, '').then((newInfo) => {
                     setExtractedInfo(newInfo);
+                    updateExtractedInfo(newInfo);
                     completeOnboarding();
                   });
                 }
@@ -462,12 +682,20 @@ function isSameLocation(loc1: string, loc2: string): boolean {
 function assessBrainFog(transcript: string): number {
   const text = transcript.toLowerCase();
   const fogIndicators = [
-    "i don't know", "confused", "overwhelmed", "can't think",
-    "don't remember", "everything is", "too much", "foggy",
-    "numb", "can't focus", "all at once"
+    "i don't know",
+    'confused',
+    'overwhelmed',
+    "can't think",
+    "don't remember",
+    'everything is',
+    'too much',
+    'foggy',
+    'numb',
+    "can't focus",
+    'all at once',
   ];
 
-  const count = fogIndicators.filter(i => text.includes(i)).length;
+  const count = fogIndicators.filter((i) => text.includes(i)).length;
   if (count >= 3) return 5;
   if (count >= 2) return 4;
   if (count >= 1) return 3;

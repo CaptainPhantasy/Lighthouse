@@ -47,11 +47,11 @@ async function runTest(
 }
 
 // ============================================================================
-// TEST 1: Chat Service (gemini-2.5-flash)
+// TEST 1: Chat Service (gemini-2.0-flash - 2025 stable)
 // ============================================================================
-await runTest('Chat Service (gemini-2.5-flash)', async () => {
+await runTest('Chat Service (gemini-2.0-flash)', async () => {
   const chat = ai.chats.create({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     config: {
       systemInstruction: 'You are a helpful assistant. Keep responses brief.',
     },
@@ -74,15 +74,15 @@ await runTest('Chat Service (gemini-2.5-flash)', async () => {
 });
 
 // ============================================================================
-// TEST 2: Document Analysis (gemini-2.5-flash)
+// TEST 2: Document Analysis (gemini-2.0-flash - 2025 stable)
 // ============================================================================
-await runTest('Document Analysis (gemini-2.5-flash)', async () => {
+await runTest('Document Analysis (gemini-2.0-flash)', async () => {
   // Use a small test PNG (1x1 pixel)
   const testImageBase64 =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     contents: {
       parts: [
         {
