@@ -1,12 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MOCK_TASKS, TEXTS } from '../constants';
 import { Task, UserState } from '../types';
-import { Share2, CheckCircle, Circle, Clock, Filter, AlertTriangle, Eye, EyeOff, MapPin, Copy, Link as LinkIcon, Users, Lock, Heart, Loader2, MessageSquare } from 'lucide-react';
+import { Share2, CheckCircle, Circle, Clock, Filter, AlertTriangle, Eye, EyeOff, MapPin, Copy, Link as LinkIcon, Users, Lock, Heart, Loader2, MessageSquare, Mic } from 'lucide-react';
 import LocalLegalGuide from './LocalLegalGuide';
 import { createSupportRequest } from '../services/supportRequestService';
 import { generateSupportShareMessage } from '../services/geminiService';
 import { useTheme } from '../contexts/ThemeContext';
+import { useSpeechToText } from '../hooks/useSpeechToText';
+import { useTextToSpeech } from '../hooks/useTextToSpeech';
+import { useVoicePreferences } from '../contexts/VoicePreferenceContext';
+import { VoiceToggle } from './voice';
 
 // Track generated support links to avoid duplicates
 const taskLinkCache = new Map<string, string>();
@@ -47,6 +51,29 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
   const [isGeneratingMessage, setIsGeneratingMessage] = useState(false);
   const [editedMessage, setEditedMessage] = useState<string>('');
   const [copiedMessage, setCopiedMessage] = useState(false);
+
+  // Global voice preference
+  const { voiceEnabled } = useVoicePreferences();
+
+  // Gemini-powered speech to text for message editor
+  const messageVoice = useSpeechToText();
+
+  // Gemini-powered text to speech for confirmations
+  const { speak: speakText, isSupported: ttsSupported } = useTextToSpeech();
+
+  // Sync message voice transcript
+  useEffect(() => {
+    if (messageVoice.isListening && messageVoice.transcript) {
+      setEditedMessage(messageVoice.transcript);
+    }
+  }, [messageVoice.transcript, messageVoice.isListening]);
+
+  // Voice confirmation helper
+  const speakConfirmation = useCallback(async (text: string) => {
+    if (voiceEnabled && ttsSupported) {
+      await speakText(text);
+    }
+  }, [voiceEnabled, ttsSupported, speakText]);
 
   // Check if all urgent and high priority tasks are completed
   const allUrgentAndHighCompleted = tasks.every(task => {
@@ -110,6 +137,7 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
     if (cachedLink) {
       navigator.clipboard.writeText(cachedLink);
       showToast(`Link copied! Send this to a friend to let them handle this task.`);
+      speakConfirmation('Link copied to clipboard.');
       return;
     }
 
@@ -149,6 +177,7 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
     setDynamicTasks(prev => prev.map(t =>
       t.id === taskId ? { ...t, status: 'DELEGATED' } : t
     ));
+    speakConfirmation('Task has been delegated.');
   };
 
   const handleTaskComplete = (taskId: string) => {
@@ -156,6 +185,7 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
         t.id === taskId ? { ...t, status: 'COMPLETED' } : t
     ));
     showToast('Task marked as complete!');
+    speakConfirmation('Task marked as complete.');
   };
 
   // Save showHiddenTasks to localStorage when it changes
@@ -239,6 +269,7 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
       setCopiedMessage(true);
       setTimeout(() => setCopiedMessage(false), 2000);
       showToast('Message and link copied to clipboard!');
+      speakConfirmation('Message and link copied.');
     }
   };
 
@@ -269,7 +300,10 @@ return (
         animate={{ opacity: 1, y: 0 }}
         className={`p-6 rounded-2xl shadow-sm border ${isDark ? 'bg-stone-900 border-stone-800 text-white' : 'bg-white border-stone-200'}`}
        >
-          <h2 className="text-xl font-bold mb-1">Restoration Plan</h2>
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-xl font-bold">Restoration Plan</h2>
+            {ttsSupported && <VoiceToggle />}
+          </div>
           <p className={`text-sm ${isDark ? 'text-stone-300' : 'text-stone-800'}`}>
               You don't have to do this alone. Use the <span className="font-bold">Ask Support Circle</span> button to generate task links you can share with friends and family.
           </p>
@@ -494,13 +528,32 @@ return (
                      </div>
                    </div>
                  ) : (
-                   <textarea
-                     value={editedMessage}
-                     onChange={(e) => setEditedMessage(e.target.value)}
-                     className="w-full bg-stone-100 border-2 border-stone-300 rounded-xl p-4 text-sm leading-relaxed resize-none focus:border-black focus:outline-none transition-colors"
-                     rows={5}
-                     placeholder="Your message will appear here..."
-                   />
+                   <div className="relative">
+                     <textarea
+                       value={editedMessage}
+                       onChange={(e) => setEditedMessage(e.target.value)}
+                       className="w-full bg-stone-100 border-2 border-stone-300 rounded-xl p-4 pr-12 text-sm leading-relaxed resize-none focus:border-black focus:outline-none transition-colors"
+                       rows={5}
+                       placeholder="Your message will appear here..."
+                     />
+                     <button
+                       onClick={() => {
+                         if (messageVoice.isListening) {
+                           messageVoice.stopListening();
+                         } else {
+                           messageVoice.startListening();
+                         }
+                       }}
+                       className={`absolute right-2 bottom-2 p-2 rounded-lg transition-colors ${
+                         messageVoice.isListening
+                           ? 'bg-red-100 text-red-600'
+                           : 'bg-stone-200 text-stone-600 hover:bg-stone-300'
+                       }`}
+                       title={messageVoice.isListening ? 'Stop recording' : 'Record message'}
+                     >
+                       <Mic className={`w-4 h-4 ${messageVoice.isListening ? 'animate-pulse' : ''}`} />
+                     </button>
+                   </div>
                  )}
                </div>
 

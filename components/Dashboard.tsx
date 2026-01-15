@@ -14,7 +14,7 @@ import { FloatingDock } from './ui/floating-dock';
 import { Tabs } from './ui/tabs';
 import ColourfulText from './ui/colourful-text';
 import ThemeToggle from './ThemeToggle';
-import { LayoutDashboard, FileText, HeartHandshake, AlertTriangle, Plane, Award, Users, Bell, Sparkles, Compass, CheckCircle2, Clock, TrendingUp, ArrowRight, X, Eye } from 'lucide-react';
+import { LayoutDashboard, FileText, HeartHandshake, AlertTriangle, Plane, Award, Users, Bell, Sparkles, Compass, CheckCircle2, Clock, TrendingUp, ArrowRight, X, Eye, ListTodo } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface DashboardProps {
@@ -25,6 +25,7 @@ interface DashboardProps {
   onDocumentScan?: (document: DocumentScan) => void;
   onServicePreferenceChange?: (preference: ServicePreference) => void;
   onServiceOutlineChange?: (outline: string) => void;
+  onStartOver?: () => void;
 }
 
 // Toast notification
@@ -245,7 +246,7 @@ const BentoGridOverview: React.FC<{
         </BentoCard>
 
         {/* High Priority Card */}
-        {highPriorityTasks > 0 && (
+        {actionRequiredTasks > 0 && (
           <BentoCard
             type="warning"
             onClick={() => onTabChange('TASKS')}
@@ -258,7 +259,7 @@ const BentoGridOverview: React.FC<{
               </div>
               <div>
                 <p className="text-sm opacity-70">High Priority</p>
-                <p className="text-2xl font-bold">{highPriorityTasks}</p>
+                <p className="text-2xl font-bold">{actionRequiredTasks}</p>
               </div>
               <ArrowRight className={`w-4 h-4 ml-auto ${isDark ? 'text-white' : 'text-black'}`} />
             </div>
@@ -406,6 +407,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   onDocumentScan,
   onServicePreferenceChange,
   onServiceOutlineChange,
+  onStartOver,
 }) => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -503,6 +505,21 @@ const Dashboard: React.FC<DashboardProps> = ({
         )}
       </AnimatePresence>
 
+      {/* Start Over button - always visible in bottom right */}
+      {onStartOver && (
+        <button
+          onClick={() => {
+            if (confirm('Start over? This will clear all your data and begin fresh.')) {
+              onStartOver();
+            }
+          }}
+          className="fixed bottom-4 right-4 bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-2 rounded-lg z-50 cursor-pointer shadow-lg"
+          title="Clear all data and start over"
+        >
+          Start Over
+        </button>
+      )}
+
       {/* Desktop Layout - 3 Columns */}
       <div className="hidden lg:flex">
         {/* Left Sidebar - Navigation */}
@@ -551,6 +568,19 @@ const Dashboard: React.FC<DashboardProps> = ({
             <div className="flex items-center justify-center">
               <ThemeToggle variant="floating" />
             </div>
+            {/* Start Fresh Button */}
+            <button
+              onClick={() => {
+                if (confirm('Start fresh? This will clear all your data and return to the beginning.')) {
+                  localStorage.clear();
+                  window.location.reload();
+                }
+              }}
+              className="flex items-center justify-center gap-2 w-full px-4 py-2 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 text-sm transition-colors rounded-xl hover:bg-stone-100 dark:hover:bg-stone-800"
+            >
+              <ArrowRight className="w-4 h-4 rotate-180" />
+              Start Fresh
+            </button>
           </div>
         </aside>
 
@@ -736,6 +766,18 @@ const Dashboard: React.FC<DashboardProps> = ({
                 {userState.brainFogLevel > 3 ? '☁️ Calm' : '☀️ Clear'}
               </div>
               <ThemeToggle variant="minimal" />
+              <button
+                onClick={() => {
+                  if (confirm('Start fresh? This will clear all your data and return to the beginning.')) {
+                    localStorage.clear();
+                    window.location.reload();
+                  }
+                }}
+                className={`p-2 rounded-lg ${isDark ? 'bg-stone-800 text-stone-400 hover:text-stone-200' : 'bg-stone-100 text-stone-500 hover:text-stone-700'} transition-colors`}
+                title="Start Fresh"
+              >
+                <ArrowRight className="w-4 h-4 rotate-180" />
+              </button>
             </div>
           </div>
         </header>

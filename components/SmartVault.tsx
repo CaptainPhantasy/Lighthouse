@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Camera, FileText, Loader2, Upload, Filter, Tag, CheckCircle, FileDown, Copy, Sparkles, ArrowRight, Wifi, WifiOff, AlertCircle, Eye } from 'lucide-react';
+import { Camera, FileText, Loader2, Upload, Filter, Tag, CheckCircle, FileDown, Copy, Sparkles, ArrowRight, Wifi, WifiOff, AlertCircle, Eye, Trash2 } from 'lucide-react';
 import { analyzeDocument, generateNotificationDraft } from '../services/geminiService';
 import { DocumentScan, Task } from '../types';
 import { encryptObject, decryptObject, EncryptionResult } from '../utils/encryption';
@@ -40,6 +40,17 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [decryptedData, setDecryptedData] = useState<{[key: string]: any}>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Delete document
+  const handleDeleteDocument = (docId: string) => {
+    setDocuments(prev => prev.filter(d => d.id !== docId));
+    // Remove from decrypted data
+    setDecryptedData(prev => {
+      const newData = { ...prev };
+      delete newData[docId];
+      return newData;
+    });
+  };
 
   // Phase 2: Offline queue state
   const [isOnline, setIsOnline] = useState(checkOnline());
@@ -324,28 +335,56 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
           }
           setDocuments(prev => [newDoc, ...prev]);
         }
+
+        // Reset file input after successful upload
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       } catch (err) {
         console.error('Error in document analysis:', err);
 
-        // Offline fallback - queue for later
-        if (checkOnline()) {
-          enqueueOfflineScan(file.name, mimeType, base64Data);
-          setQueuedScans(getQueueSize() + 1);
-          setScanGuidance({
-            state: 'error',
-            message: 'Having trouble analyzing. I\'ve saved it for later.',
-          });
-        } else {
-          setScanGuidance({
-            state: 'error',
-            message: 'Offline mode. Document saved for when you\'re back online.',
-          });
+        // ALWAYS create the document, even if AI analysis fails
+        // The document is still valuable - Gemini can analyze it later
+        const fallbackDoc: DocumentScan = {
+          id: Date.now().toString(),
+          name: file.name,
+          type: 'OTHER',
+          url: base64Raw,
+          summary: 'Document saved. AI analysis will retry.',
+          extractedData: [],
+          documentType: 'OTHER',
+          scannedDate: new Date().toISOString()
+        };
+
+        setDocuments(prev => [fallbackDoc, ...prev]);
+        if (onDocumentScan) {
+          onDocumentScan(fallbackDoc);
         }
-        setTimeout(() => setScanGuidance({ state: 'idle', message: '' }), 5000);
+
+        setScanGuidance({
+          state: 'complete',
+          message: `"${file.name}" saved. I'll analyze it when you're ready.`,
+        });
+        setTimeout(() => setScanGuidance({ state: 'idle', message: '' }), 3000);
       } finally {
         setIsAnalyzing(false);
+        // Reset file input so same file can be selected again
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       }
     };
+
+    reader.onerror = () => {
+      console.error('[SmartVault] Failed to read file');
+      setIsAnalyzing(false);
+      setScanGuidance({ state: 'error', message: 'Failed to read file. Please try again.' });
+      setTimeout(() => setScanGuidance({ state: 'idle', message: '' }), 3000);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    };
+
     reader.readAsDataURL(file);
   };
 
@@ -620,29 +659,35 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
             <div className="flex-1 overflow-hidden">
               <div className="flex justify-between items-start">
                 <h3 className="font-bold truncate pr-2">{doc.type}</h3>
-                <span className="text-[10px] uppercase tracking-wider bg-stone-200 px-2 py-1 rounded-full flex-shrink-0">Analyzed</span>
+                <button
+                  onClick={() => handleDeleteDocument(doc.id)}
+                  className="text-stone-400 hover:text-red-500 transition-colors p-1"
+                  title="Delete document"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
               <p className="text-sm text-stone-700 mt-1 line-clamp-2">{doc.summary}</p>
 
-              {decryptedData[doc.id] && (
-                <>
-                  <div className="mt-3 bg-stone-100 p-3 rounded-xl text-xs space-y-1">
-                    {decryptedData[doc.id].map((item: any, i: number) => (
-                      <div key={i} className="flex justify-between border-b border-stone-300 pb-1 last:border-0">
-                        <span className="text-stone-700 truncate mr-2">{item.key}:</span>
-                        <span className="font-medium truncate max-w-[50%]">{item.value}</span>
-                      </div>
-                    ))}
-                  </div>
+              {decryptedData[doc.id] && Array.isArray(decryptedData[doc.id]) && decryptedData[doc.id].length > 0 && (
+                <div className="mt-3 bg-stone-100 p-3 rounded-xl text-xs space-y-1">
+                  {decryptedData[doc.id].map((item: any, i: number) => (
+                    <div key={i} className="flex justify-between border-b border-stone-300 pb-1 last:border-0">
+                      <span className="text-stone-700 truncate mr-2">{item.key}:</span>
+                      <span className="font-medium truncate max-w-[50%]">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-                  <button
-                    onClick={() => handleGenerateDraft(doc)}
-                    className="mt-3 flex items-center gap-1 text-sm font-medium hover:underline"
-                  >
-                    <FileDown className="w-4 h-4" />
-                    Auto-Draft Letter
-                  </button>
-                </>
+              {decryptedData[doc.id] && Array.isArray(decryptedData[doc.id]) && decryptedData[doc.id].length > 0 && (
+                <button
+                  onClick={() => handleGenerateDraft(doc)}
+                  className="mt-3 flex items-center gap-1 text-sm font-medium hover:underline"
+                >
+                  <FileDown className="w-4 h-4" />
+                  Auto-Draft Letter
+                </button>
               )}
             </div>
           </motion.div>

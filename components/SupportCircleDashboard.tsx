@@ -1,8 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { UserState, Task } from '../types';
-import { HeartHandshake, Calendar, MessageSquare, Download } from 'lucide-react';
+import { HeartHandshake, Calendar, MessageSquare, Download, Mic } from 'lucide-react';
 import { generateSpeech } from '../services/geminiService';
 import { useTheme } from '../contexts/ThemeContext';
+import { useSpeechToText } from '../hooks/useSpeechToText';
+import { useTextToSpeech } from '../hooks/useTextToSpeech';
+import { useVoicePreferences } from '../contexts/VoicePreferenceContext';
+import { VoiceToggle } from './voice';
 
 interface SupportCircleDashboardProps {
   userState: UserState;
@@ -31,6 +35,29 @@ const SupportCircleDashboard: React.FC<SupportCircleDashboardProps> = ({
   supportMessages
 }) => {
   const { isDark } = useTheme();
+
+  // Global voice preference
+  const { voiceEnabled } = useVoicePreferences();
+
+  // Gemini-powered speech to text for messages
+  const { isListening, transcript, startListening, stopListening } = useSpeechToText();
+
+  // Gemini-powered text to speech for confirmations
+  const { speak: speakText, isSupported: ttsSupported } = useTextToSpeech();
+
+  // Sync transcript with message input
+  useEffect(() => {
+    if (isListening && transcript) {
+      setNewMessage(transcript);
+    }
+  }, [transcript, isListening]);
+
+  // Voice confirmation helper
+  const speakConfirmation = useCallback(async (text: string) => {
+    if (voiceEnabled && ttsSupported) {
+      await speakText(text);
+    }
+  }, [voiceEnabled, ttsSupported, speakText]);
 
   const [careTasks, setCareTasks] = useState<CareTask[]>([
     {
@@ -80,6 +107,7 @@ const SupportCircleDashboard: React.FC<SupportCircleDashboardProps> = ({
     setCareTasks(prev => prev.map(task =>
       task.id === taskId ? { ...task, assigned: true } : task
     ));
+    speakConfirmation('Thank you for volunteering to help.');
   };
 
   const handleAddMessage = () => {
@@ -92,26 +120,26 @@ const SupportCircleDashboard: React.FC<SupportCircleDashboardProps> = ({
       };
       setMessages(prev => [...prev, message]);
       setNewMessage('');
+      speakConfirmation('Message of support sent.');
     }
   };
 
   const handlePlayEulogy = async () => {
     try {
-      // Check if speech synthesis is available
-      if ('speechSynthesis' in window) {
-        // Create a eulogy text (in real implementation, this would come from user input)
-        const eulogyText = `A eulogy for ${userState.deceasedName || 'our beloved friend'}. This is a time to remember and celebrate their life, the love they shared, and the legacy they leave behind.`;
+      const eulogyText = `A eulogy for ${userState.deceasedName || 'our beloved friend'}. This is a time to remember and celebrate their life, the love they shared, and the legacy they leave behind.`;
 
-        // Create utterance
-        const utterance = new SpeechSynthesisUtterance(eulogyText);
-        utterance.rate = 0.8;
-        utterance.pitch = 1;
-        utterance.volume = 1;
+      // Use Gemini TTS instead of browser synthesis
+      const audioBuffer = await generateSpeech(eulogyText);
 
-        // Play the eulogy
-        window.speechSynthesis.speak(utterance);
+      if (audioBuffer) {
+        // Play the audio using Web Audio API
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(ctx.destination);
+        source.start(0);
       } else {
-        alert('Speech synthesis is not supported in your browser.');
+        alert('Unable to play eulogy. Please try again.');
       }
     } catch (error) {
       console.error('Error playing eulogy:', error);
@@ -136,6 +164,8 @@ const SupportCircleDashboard: React.FC<SupportCircleDashboardProps> = ({
     a.download = `care-summary-${userState.deceasedName || 'loved-one'}-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
+
+    speakConfirmation('Care summary downloaded.');
   };
 
   return (
@@ -146,6 +176,8 @@ const SupportCircleDashboard: React.FC<SupportCircleDashboardProps> = ({
           <div className={`inline-flex items-center gap-2 ${isDark ? 'bg-stone-800/80' : 'bg-white/80'} backdrop-blur px-4 py-2 rounded-full mb-4`}>
             <HeartHandshake className={`w-5 h-5 ${isDark ? 'text-white' : 'text-black'}`} />
             <h1 className={`text-xl font-semibold ${isDark ? 'text-white' : 'text-black'}`}>Support Circle</h1>
+            {/* Voice toggle */}
+            {ttsSupported && <VoiceToggle size="sm" />}
           </div>
           <h2 className={`text-2xl font-bold mb-2 ${isDark ? 'text-white' : 'text-black'}`}>
             Supporting {userState.deceasedName || 'Your Loved One'}
@@ -258,6 +290,23 @@ const SupportCircleDashboard: React.FC<SupportCircleDashboardProps> = ({
               className={`flex-1 border ${isDark ? 'border-stone-700 bg-stone-900 text-white focus:ring-stone-500' : 'border-stone-300 focus:ring-black'} rounded-lg px-4 py-2 focus:outline-none focus:ring-2`}
               onKeyPress={(e) => e.key === 'Enter' && handleAddMessage()}
             />
+            <button
+              onClick={() => {
+                if (isListening) {
+                  stopListening();
+                } else {
+                  startListening();
+                }
+              }}
+              className={`p-2 rounded-lg transition-colors ${
+                isListening
+                  ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                  : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700'
+              }`}
+              title={isListening ? 'Stop recording' : 'Record message'}
+            >
+              <Mic className={`w-5 h-5 ${isListening ? 'animate-pulse' : ''}`} />
+            </button>
             <button
               onClick={handleAddMessage}
               disabled={!newMessage.trim()}

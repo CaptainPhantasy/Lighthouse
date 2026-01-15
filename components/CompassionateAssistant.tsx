@@ -54,6 +54,7 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
   const [autoPlay, setAutoPlay] = useState(false);
   const [serviceOutline, setServiceOutline] = useState<string | null>(userState.serviceOutline || null);
 
+  // Main chat voice input
   const {
     isListening,
     transcript: voiceTranscript,
@@ -63,12 +64,23 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
     browserSupportsSpeechRecognition
   } = useSpeechToText();
 
+  // Service outline editor voice input (separate from chat)
+  const outlineVoice = useSpeechToText();
+
   // Sync hook transcript with input
   useEffect(() => {
     if (voiceTranscript) {
       setInput(voiceTranscript);
     }
   }, [voiceTranscript]);
+
+  // Sync outline voice transcript
+  useEffect(() => {
+    if (outlineVoice.isListening && outlineVoice.transcript) {
+      setEditedOutline(outlineVoice.transcript);
+    }
+  }, [outlineVoice.transcript, outlineVoice.isListening]);
+
   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false);
   const [questionsAsked, setQuestionsAsked] = useState<string[]>([]);
   const [isEditingOutline, setIsEditingOutline] = useState(false);
@@ -230,26 +242,39 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
   const playAudio = async (audioBuffer: AudioBuffer) => {
     stopAudio();
     try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      const audioContext = new AudioContext();
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) {
+        throw new Error('AudioContext not supported');
+      }
+
+      const audioContext = new AudioContextClass();
       audioContextRef.current = audioContext;
+
+      // Resume if suspended (autoplay policy)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
 
       const source = audioContext.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(audioContext.destination);
 
       nextStartTimeRef.current = audioContext.currentTime;
-      source.start(nextStartTimeRef.current);
-      audioSourceRef.current = source;
 
       source.onended = () => {
         setIsPlayingAudio(false);
+        audioSourceRef.current = null;
       };
+
+      source.start(nextStartTimeRef.current);
+      audioSourceRef.current = source;
 
       setIsPlayingAudio(true);
     } catch (error) {
       console.error('Error playing audio:', error);
       setIsPlayingAudio(false);
+      audioSourceRef.current = null;
+      audioContextRef.current = null;
     }
   };
 
@@ -997,17 +1022,38 @@ ${template.closingSection}`;
               </div>
             </div>
             {isEditingOutline ? (
-              <textarea
-                value={editedOutline}
-                onChange={(e) => {
-                  setEditedOutline(e.target.value);
-                  if (onServiceOutlineChange) {
-                    onServiceOutlineChange(e.target.value);
-                  }
-                }}
-                className={`w-full h-64 px-3 py-2 ${isDark ? 'bg-stone-900 border-stone-700 focus:border-stone-500 text-white' : 'bg-white border-stone-300 focus:border-black'} rounded-lg text-sm focus:outline-none font-mono`}
-                placeholder="Edit your service outline..."
-              />
+              <div className="flex gap-2">
+                <textarea
+                  value={editedOutline}
+                  onChange={(e) => {
+                    setEditedOutline(e.target.value);
+                    if (onServiceOutlineChange) {
+                      onServiceOutlineChange(e.target.value);
+                    }
+                  }}
+                  className={`flex-1 h-64 px-3 py-2 ${isDark ? 'bg-stone-900 border-stone-700 focus:border-stone-500 text-white' : 'bg-white border-stone-300 focus:border-black'} rounded-lg text-sm focus:outline-none font-mono`}
+                  placeholder="Edit your service outline..."
+                />
+                <button
+                  onClick={() => {
+                    if (outlineVoice.isListening) {
+                      outlineVoice.stopListening();
+                    } else {
+                      outlineVoice.startListening();
+                    }
+                  }}
+                  className={`self-start px-3 py-2 rounded-lg transition-colors ${
+                    outlineVoice.isListening
+                      ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                      : isDark
+                      ? 'bg-stone-800 text-stone-400 hover:bg-stone-700'
+                      : 'bg-stone-200 text-stone-600 hover:bg-stone-300'
+                  }`}
+                  title={outlineVoice.isListening ? 'Stop recording' : 'Voice input'}
+                >
+                  <Mic className={`w-5 h-5 ${outlineVoice.isListening ? 'animate-pulse' : ''}`} />
+                </button>
+              </div>
             ) : (
               <pre className={`whitespace-pre-wrap text-sm ${isDark ? 'text-stone-300' : 'text-stone-700'} overflow-x-auto max-h-64 font-mono`}>
                 {editedOutline}

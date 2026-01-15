@@ -105,7 +105,7 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
   const [showLoader, setShowLoader] = useState(false);
 
   // Voice input for deceased name
-  const { isListening: isListeningForVoice, transcript: voiceTranscript, startListening: startVoiceListening, stopListening: stopVoiceListening, browserSupportsSpeechRecognition, interimTranscript } = useSpeechToText();
+  const { isListening: isListeningForVoice, transcript: voiceTranscript, startListening: startVoiceListening, stopListening: stopVoiceListening, browserSupportsSpeechRecognition, clearTranscript } = useSpeechToText();
 
   // Auto-save effect
   useEffect(() => {
@@ -167,7 +167,7 @@ const IntakeFlow: React.FC<IntakeFlowProps> = ({ onComplete }) => {
       setShouldAutoAdvance(true); // Enable auto-advance after stopping
     } else {
       // Clear existing transcript and start fresh
-      clearTranscript?.();
+      clearTranscript();
       startVoiceListening({ continuous: true, interimResults: true });
     }
   };
