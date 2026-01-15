@@ -1,3 +1,14 @@
+---
+title: "Lighthouse - A Compassionate AI Companion for Grief"
+type: readme
+status: stable
+last_updated: 2025-12-27
+audience: general
+tags:
+  - project
+  - overview
+---
+
 # Lighthouse - A compassionate AI companion for grief
 
 In the quiet moments after loss, when the world feels overwhelming and the heart is heavy, there is light. Lighthouse is here to be that light—a gentle companion walking beside you during one of life's most difficult journeys.

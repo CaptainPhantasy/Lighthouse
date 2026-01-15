@@ -1,3 +1,14 @@
+---
+title: "Claude Code Agent Guidance"
+type: agent-guide
+status: stable
+last_updated: 2025-12-27
+audience: agent
+tags:
+  - agent
+  - development
+---
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
