@@ -160,6 +160,63 @@
   animation: spin 1s linear infinite;
 }
 
+/* Voice activity animations */
+@keyframes voice-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(168, 162, 158, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(168, 162, 158, 0);
+  }
+}
+
+.voice-glow {
+  animation: voice-glow 2s ease-in-out infinite;
+}
+
+@keyframes voice-breathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
+.voice-breathe {
+  animation: voice-breathe 4s ease-in-out infinite;
+}
+
+@keyframes voice-pulse-ring {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.5;
+  }
+}
+
+.voice-pulse-ring {
+  animation: voice-pulse-ring 1.5s ease-in-out infinite;
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .voice-glow,
+  .voice-breathe,
+  .voice-pulse-ring {
+    animation: none;
+  }
+}
+
 /* Smooth transitions */
 .transition-all {
   transition-property: all;

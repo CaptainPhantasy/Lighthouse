@@ -29,6 +29,8 @@ import { setStoryContext } from '@/services/geminiService';
 import { UserState, WishesKnowledgeLevel } from '@/types';
 import { deepResearchInterstateTransport } from '@/services/geminiService';
 import { Send, Mic } from 'lucide-react';
+import { useVoicePreferences } from '@/contexts/VoicePreferenceContext';
+import { VoiceWelcomeModal } from '../voice';
 
 // ============================================================================
 // TYPES
@@ -63,6 +65,9 @@ const MAX_CONVERSATION_TURNS = 5; // Prevent infinite loops
 // ============================================================================
 
 export default function VoiceIntro({ onComplete, mode, restoredCheckpoint }: VoiceIntroProps) {
+  // Global voice preference
+  const { hasSeenWelcomeModal } = useVoicePreferences();
+
   // State
   const [aiResponse, setAiResponse] = useState('');
   const [currentTranscript, setCurrentTranscript] = useState('');
@@ -70,11 +75,25 @@ export default function VoiceIntro({ onComplete, mode, restoredCheckpoint }: Voi
   const [hasStarted, setHasStarted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [textInput, setTextInput] = useState('');
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
   // Refs
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const conversationTurnRef = useRef(0);
   const lastTranscriptTimeRef = useRef(Date.now());
+  const isMountedRef = useRef(true);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      // Clear any running timers
+      if (silenceTimerRef.current) {
+        clearInterval(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Checkpointed narrative hook
   const {
@@ -151,21 +170,36 @@ Take your time. I'm listening.`;
 
   useEffect(() => {
     if (!hasStarted && !restoredCheckpoint) {
-      if (ttsSupported && isVoiceMode) {
-        speak(GREETING).then(() => {
-          setHasStarted(true);
-          setAiResponse(GREETING);
-          setTimeout(() => {
-            startListening();
-          }, 1000);
-        });
-      } else {
-        setAiResponse(GREETING);
-        setHasStarted(true);
-        if (isVoiceMode) {
+      // Always show the greeting text first
+      setAiResponse(GREETING);
+      setHasStarted(true);
+
+      // Small delay to ensure DOM is ready, then speak
+      setTimeout(() => {
+        if (ttsSupported && isVoiceMode) {
+          speak(GREETING)
+            .then(() => {
+              // After speaking, start listening
+              setTimeout(() => {
+                if (isMountedRef.current && isVoiceMode) {
+                  startListening();
+                }
+              }, 500);
+            })
+            .catch((err) => {
+              console.error('[VoiceIntro] TTS failed, still starting listening:', err);
+              // Even if TTS fails, start listening
+              setTimeout(() => {
+                if (isMountedRef.current && isVoiceMode) {
+                  startListening();
+                }
+              }, 500);
+            });
+        } else if (isVoiceMode) {
+          // TTS not supported, just start listening
           startListening();
         }
-      }
+      }, 300); // Small delay for user gesture to register
     }
 
     return () => {
@@ -331,16 +365,34 @@ Return ONLY valid JSON:
       stopListening();
     }
 
-    onComplete(userState);
+    // Show welcome modal if first time, otherwise complete directly
+    if (!hasSeenWelcomeModal) {
+      setShowWelcomeModal(true);
+      // Store userState temporarily for after modal closes
+      (window as any).tempUserState = userState;
+    } else {
+      onComplete(userState);
+    }
   }, [
     extractedInfo,
     userTranscript,
     aiResponses,
+    hasSeenWelcomeModal,
     onComplete,
     stopSpeaking,
     isVoiceMode,
     stopListening,
   ]);
+
+  const handleWelcomeModalClose = useCallback(() => {
+    setShowWelcomeModal(false);
+    // Retrieve stored userState and complete onboarding
+    const tempUserState = (window as any).tempUserState;
+    if (tempUserState) {
+      onComplete(tempUserState);
+      delete (window as any).tempUserState;
+    }
+  }, [onComplete]);
 
   // ============================================================================
   // PROCESS VOICE TRANSCRIPTS
@@ -471,7 +523,10 @@ Return ONLY valid JSON:
         const missing = getMissingInfo(extractedInfo);
         if (missing.length > 0 && conversationTurnRef.current < MAX_CONVERSATION_TURNS) {
           handleAiResponse(`I'm still here. Whenever you're ready${missing.includes('deceased') ? ' - who did you lose?' : ''}.`);
-          clearInterval(silenceTimerRef.current!);
+          if (silenceTimerRef.current) {
+            clearInterval(silenceTimerRef.current);
+            silenceTimerRef.current = null;
+          }
         }
       }
     }, 1000);
@@ -479,9 +534,12 @@ Return ONLY valid JSON:
     return () => {
       if (silenceTimerRef.current) {
         clearInterval(silenceTimerRef.current);
+        silenceTimerRef.current = null;
       }
     };
-  }, [isListening, hasStarted, isSpeaking, aiResponse, extractedInfo, handleAiResponse, isVoiceMode]);
+  // Note: We intentionally exclude handleAiResponse from deps to prevent interval recreation
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isListening, hasStarted, isSpeaking, aiResponse, extractedInfo, isVoiceMode]);
 
   // ============================================================================
   // RENDER
@@ -558,7 +616,7 @@ Return ONLY valid JSON:
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.5 }}
-              className="text-stone-400 dark:text-stone-500 text-base italic max-w-md text-center"
+              className="text-stone-400 dark:text-stone-400 text-base italic max-w-md text-center"
             >
               "{transcript}"
             </motion.p>
@@ -589,7 +647,7 @@ Return ONLY valid JSON:
         )}
 
         {/* Status Indicators */}
-        <div className="flex items-center gap-4 text-stone-400 dark:text-stone-500 text-sm">
+        <div className="flex items-center gap-4 text-stone-500 dark:text-stone-400 text-sm">
           {/* Listening status */}
           {isVoiceMode && isListening && (
             <div className="flex items-center gap-2">
@@ -638,6 +696,12 @@ Return ONLY valid JSON:
           </div>
         )}
       </div>
+
+      {/* Voice Welcome Modal */}
+      <VoiceWelcomeModal
+        isOpen={showWelcomeModal}
+        onClose={handleWelcomeModalClose}
+      />
     </div>
   );
 }

@@ -5,13 +5,47 @@ import Dashboard from './components/Dashboard';
 import SplashScreen from './components/SplashScreen';
 import VolunteerPage from './components/VolunteerPage';
 import SentientGateway from './components/onboarding/SentientGateway';
+import SentientIntake from './components/onboarding/SentientIntake';
+import SentientDashboard from './components/SentientDashboard';
 import VoiceIntro from './components/onboarding/VoiceIntro';
-import { AppView, UserState, DocumentScan, Task, ServicePreference } from './types';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import {
+  AppView,
+  UserState,
+  DocumentScan,
+  Task,
+  ServicePreference,
+  SentientUserState,
+  LegacyTask,
+  RecordedMemory,
+} from './types';
 import { INITIAL_USER_STATE } from './constants';
 import { isEncrypted, decryptObject, encryptObject, sanitizeData } from './utils/encryption';
 import { ENCRYPTION_PASSWORD } from './constants';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { VoicePreferenceProvider } from './contexts/VoicePreferenceContext';
 import { type NarrativeCheckpoint } from './hooks/useCheckpointedNarrative';
+
+// ============================================================================
+// VIEW VALIDATION - Prevents blank screen from invalid localStorage state
+// ============================================================================
+
+function isValidView(value: string): value is AppView {
+  return Object.values(AppView).includes(value as AppView);
+}
+
+function sanitizeView(savedView: string | null): AppView {
+  if (savedView && isValidView(savedView)) {
+    console.log('[App] Loaded valid view from localStorage:', savedView);
+    return savedView as AppView;
+  }
+  // Reset to safe default if view is invalid or missing
+  if (savedView && !isValidView(savedView)) {
+    console.warn('[App] Invalid view in localStorage, resetting to SENTIENT_GATEWAY:', savedView);
+    localStorage.removeItem('lighthouse_view');
+  }
+  return AppView.SENTIENT_GATEWAY;
+}
 
 const AppContent: React.FC = () => {
   const [splashScreenVisible, setSplashScreenVisible] = useState(true);
@@ -21,9 +55,42 @@ const AppContent: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [volunteerRequestId, setVolunteerRequestId] = useState<string | null>(null);
 
+  // Clear all app data and start over
+  const handleStartOver = () => {
+    console.log('[App] Starting over - clearing all data');
+    localStorage.removeItem('lighthouse_view');
+    localStorage.removeItem('userState');
+    localStorage.removeItem('documentScans');
+    localStorage.removeItem('tasks');
+    localStorage.removeItem('serviceOutline');
+    localStorage.removeItem('lighthouse_narrative_checkpoint');
+    localStorage.removeItem('lighthouse_intake_step');
+    localStorage.removeItem('lighthouse_intake_data');
+    localStorage.removeItem('sentient_intake_data');
+    localStorage.removeItem('voicePreferences');
+    // Reset to initial state
+    setUserState(INITIAL_USER_STATE);
+    setDocumentScans([]);
+    setTasks([]);
+    setView(AppView.SENTIENT_GATEWAY);
+    window.location.reload();
+  };
+
   // Phase 2: Sentient onboarding state
   const [voiceMode, setVoiceMode] = useState<'voice' | 'discretion'>('voice');
   const [restoredCheckpoint, setRestoredCheckpoint] = useState<NarrativeCheckpoint | undefined>(undefined);
+
+  // Sentient Path state (proactive/legacy planning)
+  const [sentientUserState, setSentientUserState] = useState<SentientUserState>({
+    name: '',
+    lifeStage: 'YOUNG_ADULT',
+    primaryGoal: 'ALL',
+    memories: [],
+    documents: [],
+    messages: [],
+    tasks: [],
+    voiceEnabled: true,
+  });
 
   // Phase 2: Check for narrative checkpoint on mount
   useEffect(() => {
@@ -64,7 +131,7 @@ const AppContent: React.FC = () => {
         const savedServiceOutline = localStorage.getItem('serviceOutline');
 
         if (savedView) {
-          setView(savedView as AppView);
+          setView(sanitizeView(savedView));
         }
 
         // Decrypt and load user state
@@ -132,45 +199,106 @@ const AppContent: React.FC = () => {
     loadState();
   }, []);
 
+  // Update document title based on current view
+  useEffect(() => {
+    const titles: Record<AppView, string> = {
+      [AppView.SENTIENT_GATEWAY]: 'Lighthouse - Welcome',
+      [AppView.VOICE_INTRO]: 'Lighthouse - Share Your Story',
+      [AppView.INTAKE]: 'Lighthouse - Getting Started',
+      [AppView.TRANSITION]: 'Lighthouse - Preparing Your Space',
+      [AppView.DASHBOARD]: `Lighthouse${userState.name ? ` - For ${userState.name}` : ''}`,
+      [AppView.VOLUNTEER]: 'Lighthouse - Support Circle',
+      [AppView.SENTIENT_INTAKE]: 'Lighthouse - Legacy Planning',
+      [AppView.SENTIENT_DASHBOARD]: `Lighthouse - ${sentientUserState.name ? `${sentientUserState.name}'s` : ''} Legacy`,
+    };
+    document.title = titles[view] || 'Lighthouse';
+  }, [view, userState.name, sentientUserState.name]);
+
   // Save user state to localStorage when it changes
   useEffect(() => {
     if (userState.name) { // Only save after intake is started
       // Encrypt sensitive data before saving
       const sanitizedUserState = sanitizeData(userState);
+      let cancelled = false;
+
       encryptObject(sanitizedUserState, ENCRYPTION_PASSWORD)
         .then(encrypted => {
-          localStorage.setItem('userState', JSON.stringify(encrypted));
+          if (!cancelled) {
+            try {
+              localStorage.setItem('userState', JSON.stringify(encrypted));
+            } catch (e) {
+              console.error('localStorage quota exceeded or error:', e);
+            }
+          }
         })
         .catch(error => {
-          console.error('Failed to encrypt user state:', error);
-          localStorage.setItem('userState', JSON.stringify(sanitizedUserState));
+          if (!cancelled) {
+            console.error('Failed to encrypt user state:', error);
+            try {
+              localStorage.setItem('userState', JSON.stringify(sanitizedUserState));
+            } catch (e) {
+              console.error('localStorage error:', e);
+            }
+          }
         });
+
+      return () => { cancelled = true; };
     }
   }, [userState]);
 
   // Save tasks to localStorage when they change
   useEffect(() => {
     if (tasks.length > 0) {
+      let cancelled = false;
       const encrypted = encryptObject(tasks, ENCRYPTION_PASSWORD);
       encrypted.then(result => {
-        localStorage.setItem('tasks', JSON.stringify(result));
+        if (!cancelled) {
+          try {
+            localStorage.setItem('tasks', JSON.stringify(result));
+          } catch (e) {
+            console.error('localStorage quota exceeded or error:', e);
+          }
+        }
       }).catch(error => {
-        console.error('Failed to encrypt tasks:', error);
-        localStorage.setItem('tasks', JSON.stringify(tasks));
+        if (!cancelled) {
+          console.error('Failed to encrypt tasks:', error);
+          try {
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+          } catch (e) {
+            console.error('localStorage error:', e);
+          }
+        }
       });
+
+      return () => { cancelled = true; };
     }
   }, [tasks]);
 
   // Save document scans to localStorage when they change
   useEffect(() => {
     if (documentScans.length > 0) {
+      let cancelled = false;
       const encrypted = encryptObject(documentScans, ENCRYPTION_PASSWORD);
       encrypted.then(result => {
-        localStorage.setItem('documentScans', JSON.stringify(result));
+        if (!cancelled) {
+          try {
+            localStorage.setItem('documentScans', JSON.stringify(result));
+          } catch (e) {
+            console.error('localStorage quota exceeded or error:', e);
+          }
+        }
       }).catch(error => {
-        console.error('Failed to encrypt document scans:', error);
-        localStorage.setItem('documentScans', JSON.stringify(documentScans));
+        if (!cancelled) {
+          console.error('Failed to encrypt document scans:', error);
+          try {
+            localStorage.setItem('documentScans', JSON.stringify(documentScans));
+          } catch (e) {
+            console.error('localStorage error:', e);
+          }
+        }
       });
+
+      return () => { cancelled = true; };
     }
   }, [documentScans]);
 
@@ -197,12 +325,16 @@ const AppContent: React.FC = () => {
 
   // Phase 2: Sentient onboarding handlers
   const handleGatewayEnter = (mode: 'voice' | 'discretion') => {
+    console.log('[App] handleGatewayEnter called with mode:', mode);
     setVoiceMode(mode);
     setView(AppView.VOICE_INTRO);
+    localStorage.setItem('lighthouse_view', AppView.VOICE_INTRO);
   };
 
   const handleResumeCheckpoint = () => {
+    console.log('[App] handleResumeCheckpoint called');
     setView(AppView.VOICE_INTRO);
+    localStorage.setItem('lighthouse_view', AppView.VOICE_INTRO);
   };
 
   const handleVoiceIntroComplete = (data: Partial<UserState>) => {
@@ -238,44 +370,125 @@ const AppContent: React.FC = () => {
     localStorage.setItem('serviceOutline', outline);
   };
 
+  // ============================================================================
+  // SENTIENT PATH HANDLERS (Proactive/Legacy Planning)
+  // ============================================================================
+
+  const handlePathSelect = (path: 'bereaved' | 'sentient') => {
+    console.log('[App] handlePathSelect called with path:', path);
+    if (path === 'sentient') {
+      setView(AppView.SENTIENT_INTAKE);
+      localStorage.setItem('lighthouse_view', AppView.SENTIENT_INTAKE);
+    }
+    // For bereaved, the gateway shows mode selector, then calls handleGatewayEnter
+  };
+
+  const handleSentientIntakeComplete = (data: SentientUserState) => {
+    setSentientUserState(data);
+    setView(AppView.SENTIENT_DASHBOARD);
+    localStorage.setItem('lighthouse_view', AppView.SENTIENT_DASHBOARD);
+  };
+
+  const handleSentientTaskAdd = (task: LegacyTask) => {
+    setSentientUserState(prev => ({
+      ...prev,
+      tasks: [...prev.tasks, task],
+    }));
+  };
+
+  const handleSentientTaskUpdate = (taskId: string, updates: Partial<LegacyTask>) => {
+    setSentientUserState(prev => ({
+      ...prev,
+      tasks: prev.tasks.map(t => (t.id === taskId ? { ...t, ...updates } : t)),
+    }));
+  };
+
+  const handleSentientMemoryAdd = (memory: RecordedMemory) => {
+    setSentientUserState(prev => ({
+      ...prev,
+      memories: [...prev.memories, memory],
+    }));
+  };
+
   return (
     <>
       {splashScreenVisible ? (
         <SplashScreen onComplete={() => setSplashScreenVisible(false)} />
       ) : (
         <>
-          {view === AppView.SENTIENT_GATEWAY ? (
-            <SentientGateway
-              onEnter={handleGatewayEnter}
-              hasCheckpoint={!!restoredCheckpoint}
-              onResumeCheckpoint={handleResumeCheckpoint}
-            />
-          ) : view === AppView.VOICE_INTRO ? (
-            <VoiceIntro
-              mode={voiceMode}
-              restoredCheckpoint={restoredCheckpoint}
-              onComplete={handleVoiceIntroComplete}
-            />
-          ) : view === AppView.INTAKE ? (
-            <IntakeFlow onComplete={handleIntakeComplete} />
-          ) : view === AppView.TRANSITION ? (
-            <TransitionView
-              userState={userState}
-              onComplete={handleTransitionComplete}
-            />
-          ) : view === AppView.VOLUNTEER ? (
-            <VolunteerPage requestId={volunteerRequestId} />
-          ) : (
-            <Dashboard
-              userState={userState}
-              tasks={tasks}
-              documentScans={documentScans}
-              onTaskCreated={handleTaskCreated}
-              onDocumentScan={handleDocumentScan}
-              onServicePreferenceChange={handleServicePreferenceChange}
-              onServiceOutlineChange={handleServiceOutlineChange}
-            />
-          )}
+          {/* Global Reset Button - always available, safely positioned */}
+          <button
+            onClick={() => {
+              if (confirm('Start over? This will clear all your data and begin fresh.')) {
+                handleStartOver();
+              }
+            }}
+            className="fixed bottom-6 right-6 sm:bottom-4 sm:right-4 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-400 text-xs px-3 py-2 rounded-lg z-[100] cursor-pointer shadow-lg border border-stone-300 dark:border-stone-700 safe-area-inset-bottom"
+            title="Clear all data and start over"
+            aria-label="Reset application and clear all data"
+          >
+            Reset
+          </button>
+
+          {(() => {
+            console.log('[App] Rendering view:', view);
+            return (
+              <ErrorBoundary key={view}>
+              {view === AppView.SENTIENT_GATEWAY ? (
+                <SentientGateway
+                  onEnter={handleGatewayEnter}
+                  onPathSelect={handlePathSelect}
+                  hasCheckpoint={!!restoredCheckpoint}
+                  onResumeCheckpoint={handleResumeCheckpoint}
+                  onStartOver={handleStartOver}
+                />
+              ) : view === AppView.SENTIENT_INTAKE ? (
+                <SentientIntake onComplete={handleSentientIntakeComplete} />
+              ) : view === AppView.SENTIENT_DASHBOARD ? (
+                <SentientDashboard
+                  userState={sentientUserState}
+                  onTaskAdd={handleSentientTaskAdd}
+                  onTaskUpdate={handleSentientTaskUpdate}
+                  onMemoryAdd={handleSentientMemoryAdd}
+                />
+              ) : view === AppView.VOICE_INTRO ? (
+                <VoiceIntro
+                  mode={voiceMode}
+                  restoredCheckpoint={restoredCheckpoint}
+                  onComplete={handleVoiceIntroComplete}
+                />
+              ) : view === AppView.INTAKE ? (
+                <IntakeFlow onComplete={handleIntakeComplete} />
+              ) : view === AppView.TRANSITION ? (
+                <TransitionView
+                  userState={userState}
+                  onComplete={handleTransitionComplete}
+                />
+              ) : view === AppView.VOLUNTEER ? (
+                <VolunteerPage requestId={volunteerRequestId} />
+              ) : view === AppView.DASHBOARD ? (
+                <Dashboard
+                  userState={userState}
+                  tasks={tasks}
+                  documentScans={documentScans}
+                  onTaskCreated={handleTaskCreated}
+                  onDocumentScan={handleDocumentScan}
+                  onServicePreferenceChange={handleServicePreferenceChange}
+                  onServiceOutlineChange={handleServiceOutlineChange}
+                  onStartOver={handleStartOver}
+                />
+              ) : (
+                // Fallback: This should never happen with view validation, but ensures we always render something
+                <SentientGateway
+                  onEnter={handleGatewayEnter}
+                  hasCheckpoint={!!restoredCheckpoint}
+                  onResumeCheckpoint={handleResumeCheckpoint}
+                  onStartOver={handleStartOver}
+                />
+              )}
+            </ErrorBoundary>
+            );
+          })()}
         </>
       )}
     </>
@@ -285,7 +498,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <ThemeProvider>
-      <AppContent />
+      <VoicePreferenceProvider>
+        <AppContent />
+      </VoicePreferenceProvider>
     </ThemeProvider>
   );
 };
