@@ -1,10 +1,13 @@
 /**
- * Phase 2: SentientGateway - The "Enter the Light" Bridge
+ * Phase 2: SentientGateway - The Intent Router
  *
  * The user's first touch with Lighthouse v2.0.
- * A single-button entry point that transforms the app from a tool to a companion.
+ * Now serves as the "Bifurcation Point" - routing users to:
+ * - BEREAVED path: Navigating a loss (existing IntakeFlow)
+ * - SENTIENT path: Planning for the future (new Legacy Architect)
  *
  * Features:
+ * - Intent Selection: "Navigate a loss" vs "Plan for the future"
  * - Discretion Toggle: Choose "Voice" or "Discretion" (text-only)
  * - Mobile-safe audio permission handling
  * - Stone palette (no gradients, no purple/indigo)
@@ -14,12 +17,16 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, Eye, ArrowRight } from 'lucide-react';
+import { Mic, Eye, ArrowRight, Heart, Sprout } from 'lucide-react';
+
+type UserPath = 'bereaved' | 'sentient';
 
 interface SentientGatewayProps {
   onEnter: (mode: 'voice' | 'discretion') => void;
+  onPathSelect?: (path: UserPath) => void; // NEW: Route to Sentient Intake
   hasCheckpoint?: boolean;
   onResumeCheckpoint?: () => void;
+  onStartOver?: () => void; // Clear all data and restart
 }
 
 // ============================================================================
@@ -37,12 +44,16 @@ const STONE_700 = '#44403c';        // Dark tone
 
 export default function SentientGateway({
   onEnter,
+  onPathSelect,
   hasCheckpoint = false,
   onResumeCheckpoint,
+  onStartOver,
 }: SentientGatewayProps) {
   const [selectedMode, setSelectedMode] = useState<'voice' | 'discretion' | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [showPathSelector, setShowPathSelector] = useState(false);
   const [showModeSelector, setShowModeSelector] = useState(false);
+  const [selectedPath, setSelectedPath] = useState<UserPath | null>(null);
   const [audioPermissionGranted, setAudioPermissionGranted] = useState(false);
   const [audioPermissionDenied, setAudioPermissionDenied] = useState(false);
 
@@ -78,6 +89,7 @@ export default function SentientGateway({
 
   // Handle mode selection
   const handleModeSelect = async (mode: 'voice' | 'discretion') => {
+    console.log('[SentientGateway] handleModeSelect called with mode:', mode, 'selectedPath:', selectedPath);
     setSelectedMode(mode);
 
     // Haptic feedback (if supported)
@@ -90,7 +102,13 @@ export default function SentientGateway({
       const granted = await checkAudioPermission();
       if (granted) {
         // Brief pause for visual feedback
-        setTimeout(() => onEnter('voice'), 800);
+        setTimeout(() => {
+          if (selectedPath === 'sentient') {
+            onPathSelect?.('sentient');
+          } else {
+            onEnter('voice');
+          }
+        }, 800);
       } else {
         // Permission denied - show discretion option
         setTimeout(() => {
@@ -100,7 +118,32 @@ export default function SentientGateway({
       }
     } else {
       // Discretion mode - no audio needed
-      setTimeout(() => onEnter('discretion'), 800);
+      setTimeout(() => {
+        if (selectedPath === 'sentient') {
+          onPathSelect?.('sentient');
+        } else {
+          onEnter('discretion');
+        }
+      }, 800);
+    }
+  };
+
+  // Handle path selection (Bereaved vs Sentient)
+  const handlePathSelect = (path: UserPath) => {
+    console.log('[SentientGateway] handlePathSelect called with path:', path);
+    setSelectedPath(path);
+
+    // Haptic feedback
+    if ('vibrate' in navigator) {
+      navigator.vibrate(30);
+    }
+
+    if (path === 'sentient') {
+      // Go to Sentient Intake directly (no mode selection needed)
+      setTimeout(() => onPathSelect?.('sentient'), 500);
+    } else {
+      // Bereaved path: show mode selector
+      setTimeout(() => setShowModeSelector(true), 500);
     }
   };
 
@@ -172,7 +215,8 @@ export default function SentientGateway({
 
         {/* Text Content */}
         <AnimatePresence mode="wait">
-          {!showModeSelector && !selectedMode && (
+          {/* Step 1: Welcome & Path Selection */}
+          {!showPathSelector && !showModeSelector && !selectedMode && !selectedPath && (
             <motion.div
               key="welcome"
               initial={{ opacity: 0, y: 20 }}
@@ -181,10 +225,10 @@ export default function SentientGateway({
               className="text-center space-y-6"
             >
               <h1 className="text-3xl font-light text-stone-800 dark:text-stone-200">
-                Enter the Light
+                Welcome to Lighthouse
               </h1>
               <p className="text-stone-500 dark:text-stone-400 text-lg leading-relaxed">
-                I'm Lighthouse. I'm here to help carry you through this.
+                I'm your companion through life's transitions.
               </p>
 
               {/* Resume Checkpoint Notice */}
@@ -199,7 +243,7 @@ export default function SentientGateway({
                   </p>
                   <button
                     onClick={handleResume}
-                    className="w-full px-4 py-2 bg-stone-800 dark:bg-stone-700 hover:bg-stone-700 dark:hover:bg-stone-600 text-white rounded-xl text-sm font-medium transition-colors"
+                    className="w-full px-4 py-2 bg-stone-800 dark:bg-stone-700 hover:bg-stone-700 dark:hover:bg-stone-600 text-white rounded-xl text-sm font-medium transition-colors cursor-pointer"
                   >
                     Continue where we left off
                   </button>
@@ -207,19 +251,87 @@ export default function SentientGateway({
               )}
 
               {/* Primary Action Button */}
-              <motion.button
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                onClick={() => setShowModeSelector(true)}
-                className="group flex items-center justify-center gap-3 px-8 py-4 bg-black dark:bg-stone-800 hover:bg-stone-800 dark:hover:bg-stone-700 text-white rounded-2xl transition-all duration-300"
+              <button
+                onClick={() => {
+                  console.log('[SentientGateway] Begin button clicked');
+                  setShowPathSelector(true);
+                }}
+                className="group flex items-center justify-center gap-3 px-8 py-4 bg-black dark:bg-stone-800 hover:bg-stone-800 dark:hover:bg-stone-700 text-white rounded-2xl transition-all duration-300 cursor-pointer shadow-lg hover:shadow-xl"
               >
                 <span>Begin</span>
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </motion.button>
+              </button>
             </motion.div>
           )}
 
+          {/* Step 2: Path Selection (Bereaved vs Sentient) */}
+          {showPathSelector && !selectedPath && (
+            <motion.div
+              key="path-selector"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="text-center space-y-8 w-full"
+            >
+              <div>
+                <h2 className="text-xl font-light text-stone-800 dark:text-stone-200 mb-2">
+                  What brings you here today?
+                </h2>
+                <p className="text-stone-500 dark:text-stone-400 text-sm">
+                  This helps me understand how to best support you.
+                </p>
+              </div>
+
+              {/* Path Options */}
+              <div className="space-y-4 w-full">
+                {/* Bereaved Path */}
+                <button
+                  onClick={() => handlePathSelect('bereaved')}
+                  className="w-full flex items-center gap-4 p-5 bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800 rounded-2xl transition-all text-left group hover:scale-[1.02] hover:translate-x-1 active:scale-[0.98] cursor-pointer shadow-sm hover:shadow-md"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-stone-200 dark:bg-stone-800 flex items-center justify-center group-hover:bg-stone-300 dark:group-hover:bg-stone-700 transition-colors">
+                    <Heart className="w-6 h-6 text-stone-600 dark:text-stone-400" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-medium text-stone-800 dark:text-stone-200">
+                      Navigating a loss
+                    </div>
+                    <div className="text-sm text-stone-500 dark:text-stone-400">
+                      I'm here to help you through bereavement.
+                    </div>
+                  </div>
+                </button>
+
+                {/* Sentient Path */}
+                <button
+                  onClick={() => handlePathSelect('sentient')}
+                  className="w-full flex items-center gap-4 p-5 bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800 rounded-2xl transition-all text-left group hover:scale-[1.02] hover:translate-x-1 active:scale-[0.98] cursor-pointer shadow-sm hover:shadow-md"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-stone-200 dark:bg-stone-800 flex items-center justify-center group-hover:bg-stone-300 dark:group-hover:bg-stone-700 transition-colors">
+                    <Sprout className="w-6 h-6 text-stone-600 dark:text-stone-400" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-medium text-stone-800 dark:text-stone-200">
+                      Planning for the future
+                    </div>
+                    <div className="text-sm text-stone-500 dark:text-stone-400">
+                      I want to organize my legacy and memories.
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              {/* Back Button */}
+              <button
+                onClick={() => setShowPathSelector(false)}
+className="text-stone-500 dark:text-stone-400 text-sm hover:text-stone-700 dark:hover:text-stone-300 transition-colors cursor-pointer underline"
+              >
+                Go back
+              </button>
+            </motion.div>
+          )}
+
+          {/* Step 3: Mode Selector (for Bereaved path only) */}
           {showModeSelector && !selectedMode && (
             <motion.div
               key="mode-selector"
@@ -240,11 +352,9 @@ export default function SentientGateway({
               {/* Mode Options */}
               <div className="space-y-4 w-full">
                 {/* Voice Option */}
-                <motion.button
-                  whileHover={{ scale: 1.02, x: 4 }}
-                  whileTap={{ scale: 0.98 }}
+                <button
                   onClick={() => handleModeSelect('voice')}
-                  className="w-full flex items-center gap-4 p-5 bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800 rounded-2xl transition-all text-left group"
+                  className="w-full flex items-center gap-4 p-5 bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800 rounded-2xl transition-all text-left group hover:scale-[1.02] hover:translate-x-1 active:scale-[0.98] cursor-pointer shadow-sm hover:shadow-md"
                 >
                   <div className="w-12 h-12 rounded-xl bg-stone-200 dark:bg-stone-800 flex items-center justify-center group-hover:bg-stone-300 dark:group-hover:bg-stone-700 transition-colors">
                     <Mic className="w-6 h-6 text-stone-600 dark:text-stone-400" />
@@ -257,14 +367,12 @@ export default function SentientGateway({
                       Speak naturally. I'll listen.
                     </div>
                   </div>
-                </motion.button>
+                </button>
 
                 {/* Discretion Option */}
-                <motion.button
-                  whileHover={{ scale: 1.02, x: 4 }}
-                  whileTap={{ scale: 0.98 }}
+                <button
                   onClick={() => handleModeSelect('discretion')}
-                  className="w-full flex items-center gap-4 p-5 bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800 rounded-2xl transition-all text-left group"
+                  className="w-full flex items-center gap-4 p-5 bg-stone-100 dark:bg-stone-900 hover:bg-stone-200 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800 rounded-2xl transition-all text-left group hover:scale-[1.02] hover:translate-x-1 active:scale-[0.98] cursor-pointer shadow-sm hover:shadow-md"
                 >
                   <div className="w-12 h-12 rounded-xl bg-stone-200 dark:bg-stone-800 flex items-center justify-center group-hover:bg-stone-300 dark:group-hover:bg-stone-700 transition-colors">
                     <Eye className="w-6 h-6 text-stone-600 dark:text-stone-400" />
@@ -277,13 +385,16 @@ export default function SentientGateway({
                       Text only. Quiet and private.
                     </div>
                   </div>
-                </motion.button>
+                </button>
               </div>
 
               {/* Back Button */}
               <button
-                onClick={() => setShowModeSelector(false)}
-                className="text-stone-400 dark:text-stone-500 text-sm hover:text-stone-600 dark:hover:text-stone-400 transition-colors"
+                onClick={() => {
+                  setShowModeSelector(false);
+                  setSelectedPath(null);
+                }}
+className="text-stone-500 dark:text-stone-400 text-sm hover:text-stone-700 dark:hover:text-stone-300 transition-colors cursor-pointer underline"
               >
                 Go back
               </button>
@@ -313,7 +424,7 @@ export default function SentientGateway({
               {/* Discretion Fallback */}
               <button
                 onClick={() => handleModeSelect('discretion')}
-                className="px-6 py-3 bg-stone-800 dark:bg-stone-700 hover:bg-stone-700 dark:hover:bg-stone-600 text-white rounded-xl text-sm font-medium transition-colors"
+                className="px-6 py-3 bg-stone-800 dark:bg-stone-700 hover:bg-stone-700 dark:hover:bg-stone-600 text-white rounded-xl text-sm font-medium transition-colors cursor-pointer"
               >
                 Continue with text only
               </button>
@@ -323,7 +434,7 @@ export default function SentientGateway({
                   setAudioPermissionDenied(false);
                   setShowModeSelector(false);
                 }}
-                className="text-stone-400 dark:text-stone-500 text-sm hover:text-stone-600 dark:hover:text-stone-400 transition-colors"
+className="text-stone-500 dark:text-stone-400 text-sm hover:text-stone-700 dark:hover:text-stone-300 transition-colors cursor-pointer underline"
               >
                 Go back
               </button>
@@ -364,12 +475,13 @@ export default function SentientGateway({
         {isReady && (
           <motion.p
             initial={{ opacity: 0 }}
-            animate={{ opacity: 0.4 }}
-            className="text-stone-300 dark:text-stone-600 text-xs mt-8"
+            animate={{ opacity: 0.6 }}
+            className="text-stone-500 dark:text-stone-400 text-xs mt-8"
           >
             Your story is safe with me.
           </motion.p>
         )}
+
       </div>
     </div>
   );
