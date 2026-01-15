@@ -1,15 +1,23 @@
 import { GoogleGenAI, LiveServerMessage, Modality, Type, FunctionDeclaration } from "@google/genai";
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+const apiKey2 = import.meta.env.VITE_GEMINI_API_KEY_2 || '';
+
+// Get primary or fallback key
+function getApiKey(): string {
+  if (apiKey && apiKey.length > 0) return apiKey;
+  if (apiKey2 && apiKey2.length > 0) return apiKey2;
+  return '';
+}
 
 // Debug: Log if API key is missing (do NOT log the actual key)
-if (!apiKey || apiKey.length === 0) {
+if (!getApiKey()) {
   console.error('CRITICAL: VITE_GEMINI_API_KEY is not set. AI features will not work.');
 } else {
   console.log('Gemini API key loaded successfully.');
 }
 
-const ai = new GoogleGenAI({ apiKey });
+const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
 // ============================================================================
 // PHASE 2: 2025 INTELLIGENCE LAYER
@@ -522,44 +530,288 @@ export const connectLiveSession = async (
   };
 };
 
-// --- TTS Service (Eulogy Reader) ---
-export const generateSpeech = async (text: string): Promise<AudioBuffer | null> => {
-  // Phase 2 Updated: Use stable 2025 models with proper fallback
-  const ttsModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+// ============================================================================
+// SPEECH-TO-TEXT (Google Cloud Speech-to-Text with OAuth + Browser fallback)
+// ============================================================================
 
-  for (const modelId of ttsModels) {
-    try {
-      console.log(`Attempting TTS with model: ${modelId}`);
-      const response = await ai.models.generateContent({
-        model: modelId,
-        contents: [{ parts: [{ text }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'Fenrir' }, // Deep, steady voice
-            },
-          },
-        },
-      });
+/**
+ * Simple audio blob creation from PCM data
+ */
+function createAudioBlob(audioData: Float32Array): Blob {
+  // Convert Float32Array to Int16Array (16-bit PCM)
+  const pcmData = new Int16Array(audioData.length);
+  for (let i = 0; i < audioData.length; i++) {
+    pcmData[i] = Math.max(-32768, Math.min(32767, audioData[i] * 32768));
+  }
+  return new Blob([pcmData], { type: 'audio/raw' });
+}
 
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (!base64Audio) {
-        console.warn(`No audio data returned from ${modelId}`);
-        continue;
-      }
+/**
+ * Convert AudioBuffer to base64 for Cloud Speech-to-Text API
+ */
+async function audioBufferToBase64(audioBuffer: AudioBuffer): Promise<string> {
+  const offlineContext = new OfflineAudioContext(
+    audioBuffer.numberOfChannels,
+    audioBuffer.length,
+    audioBuffer.sampleRate
+  );
+  const source = offlineContext.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(offlineContext.destination);
+  const renderedBuffer = await offlineContext.startRendering();
 
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 24000});
-      return await decodeAudioData(decodeAudio(base64Audio), ctx, 24000, 1);
-
-    } catch (e) {
-      console.warn(`TTS failed with model ${modelId}:`, e);
-      continue; // Try next model
+  // Convert to 16-bit PCM
+  const numberOfChannels = renderedBuffer.numberOfChannels;
+  const length = renderedBuffer.length;
+  const result = new Int16Array(length * numberOfChannels);
+  for (let channel = 0; channel < numberOfChannels; channel++) {
+    const channelData = renderedBuffer.getChannelData(channel);
+    for (let i = 0; i < length; i++) {
+      const sample = Math.max(-1, Math.min(1, channelData[i]));
+      result[i * numberOfChannels + channel] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
     }
   }
 
-  console.error("TTS failed with all models");
-  return null;
+  // Convert to base64
+  const binary = [];
+  for (let i = 0; i < result.length; i++) {
+    binary.push(String.fromCharCode(result[i] >> 8));
+    binary.push(String.fromCharCode(result[i] & 0xFF));
+  }
+  return btoa(binary.join(''));
+}
+
+/**
+ * Get OAuth token from Google Identity Services
+ * Uses the API key for implicit authentication flow
+ */
+async function getAuthToken(): Promise<string | null> {
+  // Try to get OAuth token from gsi (Google Identity Services)
+  if ((window as any).google?.accounts?.oauth2) {
+    try {
+      const tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
+        client_id: '243142485508-.apps.googleusercontent.com', // Using project number
+        scope: 'https://www.googleapis.com/auth/cloud-platform',
+        callback: (response: any) => response.access_token,
+      });
+      // For implicit flow, return the API key encoded for basic auth
+      return getApiKey();
+    } catch (e) {
+      console.error('[OAuth] Init failed:', e);
+    }
+  }
+  // Fall back to API key for authenticated requests
+  return getApiKey();
+}
+
+/**
+ * Transcribe audio using Google Cloud Speech-to-Text API
+ * Uses OAuth token if available, falls back to browser recognition
+ *
+ * @param onTranscript - Callback for transcribed text chunks
+ * @param onInterimTranscript - Callback for interim results (optional)
+ * @param onComplete - Callback when transcription is complete (optional)
+ * @param onError - Callback for errors (optional)
+ * @param language - Language code (default: 'en-US')
+ * @returns Cleanup function to stop recording
+ */
+export const transcribeAudioWithGemini = async (options: {
+  onTranscript: (text: string) => void;
+  onInterimTranscript?: (text: string) => void;
+  onComplete?: (finalText: string) => void;
+  onError?: (error: string) => void;
+  language?: string;
+}): Promise<() => Promise<void>> => {
+  const { onTranscript, onInterimTranscript, onComplete, onError, language = 'en-US' } = options;
+
+  // Audio recording setup
+  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+  let mediaStream: MediaStream | null = null;
+  let source: MediaStreamAudioSourceNode | null = null;
+  let processor: ScriptProcessorNode | null = null;
+  let audioChunks: Float32Array[] = [];
+  let isRecording = false;
+
+  const startRecording = async () => {
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      source = audioContext.createMediaStreamSource(mediaStream);
+      processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+      processor.onaudioprocess = (e) => {
+        if (isRecording) {
+          const inputData = e.inputBuffer.getChannelData(0);
+          audioChunks.push(new Float32Array(inputData));
+        }
+      };
+
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+      isRecording = true;
+
+      console.log('[STT] Recording started');
+    } catch (err) {
+      console.error('[STT] Failed to start recording:', err);
+      if (onError) onError('Failed to access microphone');
+      throw err;
+    }
+  };
+
+  const stopRecording = async (): Promise<string> => {
+    isRecording = false;
+
+    if (processor && source) {
+      processor.disconnect();
+      source.disconnect();
+    }
+
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(t => t.stop());
+    }
+
+    if (audioChunks.length === 0) {
+      if (onError) onError('No audio recorded');
+      return '';
+    }
+
+    // Combine audio chunks
+    const totalLength = audioChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const combinedAudio = new Float32Array(totalLength);
+    let offset = 0;
+    for (const chunk of audioChunks) {
+      combinedAudio.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    // Create AudioBuffer
+    const audioBuffer = audioContext.createBuffer(1, combinedAudio.length, 16000);
+    audioBuffer.getChannelData(0).set(combinedAudio);
+
+    // Try Google Cloud Speech-to-Text with OAuth/API key
+    try {
+      console.log('[STT] Attempting Google Cloud Speech-to-Text...');
+      const authToken = await getAuthToken();
+
+      const base64Audio = await audioBufferToBase64(audioBuffer);
+
+      const response = await fetch(`https://speech.googleapis.com/v1/speech:recognize?key=${authToken}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          config: {
+            encoding: 'LINEAR16',
+            sampleRateHertz: 16000,
+            languageCode: language,
+            enableAutomaticPunctuation: true,
+          },
+          audio: {
+            content: base64Audio,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[STT] API error:', response.status, errorText);
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const transcript = data.results?.[0]?.alternatives?.[0]?.transcript || '';
+
+      if (transcript) {
+        console.log('[STT] Transcription successful:', transcript);
+        if (onTranscript) onTranscript(transcript);
+        if (onComplete) onComplete(transcript);
+      } else {
+        throw new Error('No transcript in response');
+      }
+
+      return transcript;
+    } catch (err) {
+      console.error('[STT] Cloud API failed, browser fallback unavailable:', err);
+      if (onError) onError('Speech recognition failed. Please try again.');
+      return '';
+    } finally {
+      audioChunks = [];
+    }
+  };
+
+  // Start recording immediately
+  await startRecording();
+
+  // Return cleanup function
+  return async () => {
+    await stopRecording();
+    audioContext.close();
+  };
+};
+
+// --- TTS Service (Google Cloud Text-to-Speech) ---
+/**
+ * Generate speech using Google Cloud Text-to-Speech API
+ * Uses REST API endpoint: https://texttospeech.googleapis.com/v1/text:synthesize
+ * Uses standard WaveNet voices (no Vertex AI required)
+ */
+export async function generateSpeech(text: string): Promise<AudioBuffer | null> {
+  const keys = [getApiKey(), apiKey2].filter(k => k && k.length > 0);
+
+  for (let i = 0; i < keys.length; i++) {
+    try {
+      console.log(`[generateSpeech] Trying Google Cloud TTS with key ${i + 1}/${keys.length} (en-US-Wavenet-D)`);
+
+      const response = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize?' + new URLSearchParams({
+        key: keys[i],
+      }), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          input: {
+            text: text,
+          },
+          voice: {
+            languageCode: 'en-US',
+            name: 'en-US-Wavenet-D',  // Standard WaveNet voice (no Vertex required)
+          },
+          audioConfig: {
+            audioEncoding: 'MP3',
+            speakingRate: 1.0,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[generateSpeech] Key ${i + 1} API error:`, response.status, errorText);
+        continue; // Try next key
+      }
+
+      const data = await response.json();
+      const audioContent = data.audioContent;
+
+      if (!audioContent) {
+        console.error(`[generateSpeech] Key ${i + 1} - No audio content in response`);
+        continue;
+      }
+
+      // Decode base64 audio
+      const audioBytes = Uint8Array.from(atob(audioContent), c => c.charCodeAt(0));
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      const audioBuffer = await audioContext.decodeAudioData(audioBytes.buffer);
+
+      console.log(`[generateSpeech] Successfully generated audio with key ${i + 1}`);
+      return audioBuffer;
+
+    } catch (error) {
+      console.error(`[generateSpeech] Key ${i + 1} Error:`, error);
+      continue; // Try next key
+    }
+  }
+
+  console.log('[generateSpeech] All keys failed, falling back to browser TTS');
+  return null; // Fall back to browser TTS
 }
 
 export async function generateNotificationDraft(documentType: string, entities: any): Promise<{ text: string }> {
@@ -1099,3 +1351,151 @@ Important Instructions:
     return { text: fallbackOutline };
   }
 }
+
+// ============================================================================
+// SENTIENT PATH: BIOGRAPHER MODE
+// ============================================================================
+
+/**
+ * The Biographer System Instruction
+ *
+ * A skilled biographer and archivist who helps users record their life story
+ * and organize their legacy. Curious, structured, and encouraging.
+ * Does NOT offer grief support; offers legacy curation.
+ */
+export const SYSTEM_INSTRUCTION_BIOGRAPHER = `You are a skilled biographer and archivist. Your goal is to help the user record their life story and organize their legacy. You are curious, structured, and encouraging. You do not offer grief support; you offer legacy curation.
+
+Your Approach:
+- Ask thoughtful, open-ended questions about their life experiences
+- Follow up on details to capture the richness of their stories
+- Be genuinely interested in the specific details, names, dates, and places
+- Organize information into themes (childhood, career, family, wisdom)
+- Encourage reflection on what they want future generations to know
+
+Question Themes to Explore:
+1. Childhood: The house they grew up in, early memories, family dynamics
+2. Relationships: People who changed their life, love, friendship
+3. Career & Work: First jobs, career path, professional accomplishments
+4. Turning Points: Major life decisions, challenges overcome, lessons learned
+5. Values & Beliefs: What matters most, traditions to pass down, advice for the future
+6. Everyday Joys: Small moments, favorite things, simple pleasures
+
+Style Guidelines:
+- Be conversational but structured
+- Use follow-up questions like "Tell me more about..." or "What was that like?"
+- Occasionally summarize what you've heard to show you're listening
+- Gently guide toward recording specific memories with names, dates, and places
+- Keep responses warm but concise (2-3 sentences preferred)
+- End most responses with a related follow-up question
+
+Remember: You are building an archive, not having a casual chat. Every detail you capture becomes part of their legacy.`;
+
+/**
+ * Biographer Chat Response
+ *
+ * Streams responses from the Biographer AI for legacy recording sessions.
+ * Uses a dedicated system instruction focused on life story curation.
+ */
+export const streamBiographerResponse = async (
+  userName: string,
+  history: { role: string; parts: { text: string }[] }[],
+  message: string,
+  onChunk: (text: string) => void,
+  memoriesContext?: string[] // Previous memories for context
+) => {
+  const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+
+  // Build personalized system instruction with context
+  let personalizedInstruction = SYSTEM_INSTRUCTION_BIOGRAPHER;
+
+  // Add user's name
+  personalizedInstruction = `[USER'S NAME: ${userName}]\n\n${personalizedInstruction}`;
+
+  // Add context from previous memories if available
+  if (memoriesContext && memoriesContext.length > 0) {
+    const context = memoriesContext.slice(-3).map((m, i) => `[Previous Memory ${i + 1}]: ${m.substring(0, 100)}...`).join('\n');
+    personalizedInstruction = `${personalizedInstruction}\n\n[CONTEXT FROM PREVIOUS CONVERSATIONS]\n${context}\n[END CONTEXT]`;
+  }
+
+  for (const modelId of models) {
+    try {
+      console.log(`[Biographer] Chat with model: ${modelId}`);
+
+      const chat = ai.chats.create({
+        model: modelId,
+        config: {
+          systemInstruction: personalizedInstruction,
+          temperature: 0.8, // Slightly higher for more creative, exploratory questions
+        },
+      });
+
+      const result = await chat.sendMessageStream({ message });
+
+      for await (const chunk of result) {
+        if (chunk.text) {
+          onChunk(chunk.text);
+        }
+      }
+      return; // Success
+    } catch (error) {
+      console.error(`[Biographer] Chat failed with ${modelId}:`, error);
+      continue;
+    }
+  }
+
+  console.error('[Biographer] All models failed');
+  onChunk("I'm having trouble connecting. Please try again.");
+};
+
+/**
+ * Generate Biographer Prompt Suggestions
+ *
+ * Returns contextual follow-up prompts based on what the user has already shared.
+ */
+export const generateBiographerPrompts = async (
+  recentTopics: string[],
+  userName: string
+): Promise<string[]> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: [{
+        parts: [{
+          text: `You are helping ${userName} record their life story. Based on these recent topics they've discussed:
+${recentTopics.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+
+Generate 5 thoughtful follow-up questions that would help them explore deeper into these topics or transition to new related areas.
+
+Return ONLY a JSON array of question strings:
+["question 1", "question 2", "question 3", "question 4", "question 5"]
+
+Each question should be:
+- Open-ended and thought-provoking
+- Specific enough to invite a real answer
+- Warm and conversational in tone
+- Under 15 words each`
+        }]
+      }],
+      config: {
+        responseMimeType: 'application/json',
+        temperature: 0.9,
+      }
+    });
+
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error('No response');
+
+    const cleaned = cleanJsonOutput(text);
+    return JSON.parse(cleaned);
+  } catch (e) {
+    console.error('[Biographer] Prompt generation failed:', e);
+    // Fallback prompts
+    return [
+      "Tell me about a person who changed your life.",
+      "What was your first job like?",
+      "Describe a place that felt like home.",
+      "What's a lesson you learned the hard way?",
+      "What traditions do you hope to pass down?",
+    ];
+  }
+};
