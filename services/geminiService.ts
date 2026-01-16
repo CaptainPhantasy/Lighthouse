@@ -327,13 +327,71 @@ Return ONLY this JSON structure:
 
 // --- Maps Service (Funeral Homes) ---
 
-export const findFuneralHomes = async (latitude: number, longitude: number) => {
-  // Phase 2 Updated: Use stable 2025 models
-  const modelId = 'gemini-2.0-flash';
+/**
+ * Search for funeral homes using Mapbox Geocoding API
+ * Uses proximity parameter to bias results toward the given location
+ */
+const searchFuneralHomesMapbox = async (latitude: number, longitude: number) => {
+  const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+  if (!mapboxToken) {
+    throw new Error('Mapbox access token not configured');
+  }
 
+  // Mapbox Geocoding API - search for funeral homes near location
+  // Using proximity parameter to bias results (longitude, latitude)
+  const url = new URL('https://api.mapbox.com/geocoding/v5/mapbox.places/funeral%20home.json');
+  url.searchParams.set('access_token', mapboxToken);
+  url.searchParams.set('proximity', `${longitude},${latitude}`);
+  url.searchParams.set('limit', '5');
+  url.searchParams.set('types', 'poi');
+
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    throw new Error(`Mapbox API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+
+  // Extract funeral home information
+  if (!data.features || data.features.length === 0) {
+    return null;
+  }
+
+  return data.features.map((feature: any) => ({
+    name: feature.text,
+    address: feature.place_name,
+    distance: feature.properties?.distance || null, // in meters
+    coordinates: feature.center,
+  }));
+};
+
+export const findFuneralHomes = async (latitude: number, longitude: number) => {
+  // Try Mapbox first (more reliable, no extra cost)
+  try {
+    const funeralHomes = await searchFuneralHomesMapbox(latitude, longitude);
+
+    if (funeralHomes && funeralHomes.length > 0) {
+      // Format with Gemini for compassionate presentation
+      const homesList = funeralHomes
+        .map((h, i) => `${i + 1}. **${h.name}**\n   ${h.address}`)
+        .join('\n\n');
+
+      const compassionateResponse = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: `These are funeral homes near the user's location:\n\n${homesList}\n\nPlease provide a brief, compassionate introduction to these options. Keep it under 100 words.`,
+      });
+
+      return compassionateResponse.text;
+    }
+  } catch (e) {
+    console.error('[Mapbox] Funeral homes search failed:', e);
+    // Fall through to Google Maps attempt
+  }
+
+  // Fallback: Try Google Maps grounding (if enabled)
   try {
     const response = await ai.models.generateContent({
-      model: modelId,
+      model: 'gemini-2.0-flash',
       contents: "Find 3 highly-rated funeral homes near me. Provide their names and a brief comforting summary of their reviews.",
       config: {
         tools: [{ googleMaps: {} }],
@@ -344,10 +402,10 @@ export const findFuneralHomes = async (latitude: number, longitude: number) => {
         }
       }
     });
-    return response.text; // Will contain markdown links to maps
+    return response.text;
   } catch (e) {
-    console.error("Maps Error:", e);
-    return "I couldn't load the map data right now.";
+    console.error('[Google Maps] Funeral homes search failed:', e);
+    return "I couldn't load funeral home information right now. Please try searching for 'funeral homes near me' on Google Maps.";
   }
 };
 

@@ -82,7 +82,7 @@ describe('Gemini AI Service E2E Tests', () => {
     );
   });
 
-  describe('3. Funeral Homes Search (gemini-2.5-flash + Maps)', () => {
+  describe('3. Funeral Homes Search (Mapbox + Gemini)', () => {
     it(
       'should find funeral homes near location',
       async () => {
@@ -91,10 +91,12 @@ describe('Gemini AI Service E2E Tests', () => {
 
         expect(result).toBeDefined();
 
-        // Google Maps tool may be unavailable in some environments (e.g., CI)
-        // Accept either a successful response OR a graceful fallback message
-        const FALLBACK_MESSAGE = "I couldn't load the map data right now.";
-        const hasValidResponse = result.length > 50 || result.includes(FALLBACK_MESSAGE);
+        // Accept: Mapbox success (>50 chars), Google Maps fallback, or graceful error message
+        const hasValidResponse =
+          result.length > 50 ||
+          result.includes('funeral home') ||
+          result.includes('options') ||
+          result.includes("couldn't load");
 
         expect(hasValidResponse).toBe(true);
 

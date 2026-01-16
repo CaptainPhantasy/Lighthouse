@@ -26,6 +26,7 @@ export default defineConfig(({ mode }) => {
         'process.env.SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY),
         'process.env.SUPABASE_SERVICE_ROLE_KEY': JSON.stringify(env.SUPABASE_SERVICE_ROLE_KEY),
         'process.env.RESEND_API_KEY': JSON.stringify(env.RESEND_API_KEY),
+        'process.env.VITE_MAPBOX_ACCESS_TOKEN': JSON.stringify(env.VITE_MAPBOX_ACCESS_TOKEN),
       },
       resolve: {
         alias: {
