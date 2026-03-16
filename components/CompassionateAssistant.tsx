@@ -6,6 +6,9 @@ import { ChatMessage, UserState, DocumentScan, ServicePreference } from '../type
 import { SERVICE_PREFERENCES, OFFICIANT_QUESTIONS, SERVICE_TEMPLATES } from '../constants';
 import useSpeechToText from '../hooks/useSpeechToText';
 import { useTheme } from '../contexts/ThemeContext';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('CompassionateAssistant');
 
 interface AssistantProps {
   userState: UserState;
@@ -271,7 +274,7 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
 
       setIsPlayingAudio(true);
     } catch (error) {
-      console.error('Error playing audio:', error);
+      logger.error('Error playing audio:', error);
       setIsPlayingAudio(false);
       audioSourceRef.current = null;
       audioContextRef.current = null;
@@ -282,7 +285,7 @@ const CompassionateAssistant: React.FC<AssistantProps> = ({
     try {
       await navigator.clipboard.writeText(text);
     } catch (err) {
-      console.error('Failed to copy text: ', err);
+      logger.error('Failed to copy text: ', err);
     }
   };
 
@@ -341,11 +344,11 @@ When the user asks "What do I do next?" or similar, proactively reference the do
             await playAudio(audioBuffer);
           }
         } catch (error) {
-          console.error('Error generating speech:', error);
+          logger.error('Error generating speech:', error);
         }
       }
     } catch (error) {
-      console.error('Error streaming response:', error);
+      logger.error('Error streaming response:', error);
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'model',
@@ -372,14 +375,15 @@ When the user asks "What do I do next?" or similar, proactively reference the do
           // onAudioData callback
           (audioBuffer: AudioBuffer) => {
             // Play incoming audio from the live session
-            const source = audioContextRef.current?.createBufferSource();
-            if (source) {
-              source.buffer = audioBuffer;
-              source.connect(audioContextRef.current.destination);
-              source.start();
-              setIsPlayingAudio(true);
-              source.onended = () => setIsPlayingAudio(false);
-            }
+            const audioContext = audioContextRef.current;
+            if (!audioContext) return;
+
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioContext.destination);
+            source.start();
+            setIsPlayingAudio(true);
+            source.onended = () => setIsPlayingAudio(false);
           },
           // onClose callback
           () => {
@@ -396,7 +400,7 @@ When the user asks "What do I do next?" or similar, proactively reference the do
           timestamp: new Date()
         }]);
       } catch (error) {
-        console.error('Error starting live session:', error);
+        logger.error('Error starting live session:', error);
       }
     }
   };
@@ -439,7 +443,7 @@ When the user asks "What do I do next?" or similar, proactively reference the do
           };
           setMessages(prev => [...prev, cleanedMessage]);
         } catch (error) {
-          console.error('Error cleaning up transcription:', error);
+          logger.error('Error cleaning up transcription:', error);
           // Keep original input if cleanup fails
           const originalMessage: ChatMessage = {
             id: Date.now().toString(),
@@ -471,7 +475,7 @@ When the user asks "What do I do next?" or similar, proactively reference the do
       // Extract the cleaned response from the streaming
       return cleanedText.trim();
     } catch (error) {
-      console.error('Error cleaning up transcription:', error);
+      logger.error('Error cleaning up transcription:', error);
       return text; // Return original text if AI cleanup fails
     }
   };
@@ -581,7 +585,7 @@ When the user asks "What do I do next?" or similar, proactively reference the do
       setMessages(prev => [...prev, outlineMessage]);
 
     } catch (error) {
-      console.error('Error generating service outline:', error);
+      logger.error('Error generating service outline:', error);
       const template = SERVICE_TEMPLATES[servicePreference];
       const fallbackOutline = `# 20-Minute Service Outline for ${userState.deceasedName || 'Your Loved One'}
 
@@ -645,7 +649,7 @@ ${template.closingSection}`;
         throw new Error('No audio data generated');
       }
     } catch (error) {
-      console.error('Error generating speech:', error);
+      logger.error('Error generating speech:', error);
       setIsPlayingAudio(false);
       // Show gentle error message
       showToast("I'm having trouble reading this aloud right now, but your text is saved below for you to read.");
@@ -725,7 +729,7 @@ ${template.closingSection}`;
       setMessages(prev => [...prev, outlineMessage]);
       showToast("Service outline created from your memories!");
     } catch (error) {
-      console.error('Error generating outline from memories:', error);
+      logger.error('Error generating outline from memories:', error);
       showToast("I had trouble creating the outline, but your memories are saved.");
     } finally {
       setIsGeneratingOutline(false);

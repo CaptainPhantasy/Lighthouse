@@ -20,6 +20,9 @@
  */
 
 import { UserState } from '../types';
+import { createLogger } from './logger';
+
+const logger = createLogger('SecureScrub');
 
 const KEYS_TO_SCRUB = [
   'lighthouse_user_state',
@@ -120,7 +123,7 @@ export function generateMemorialDataOnly(
  * This is the "Nuke" phase - destroys all PII data.
  */
 export async function performHardDelete(): Promise<void> {
-  console.log('[SecureScrub] Performing Hard Delete phase...');
+  logger.info('Performing Hard Delete phase...');
 
   try {
     // Scrub all PII from localStorage
@@ -147,9 +150,9 @@ export async function performHardDelete(): Promise<void> {
       });
     }
 
-    console.log('[SecureScrub] Hard Delete phase complete.');
+    logger.info('Hard Delete phase complete.');
   } catch (error) {
-    console.error('[SecureScrub] Hard Delete encountered errors:', error);
+    logger.error('Hard Delete encountered errors:', error);
     throw error;
   }
 }
@@ -162,7 +165,7 @@ export async function performCompleteRestoration(
   userState: UserState,
   lanternPDFUrl?: string
 ): Promise<MemorialData> {
-  console.warn('[SecureScrub] performCompleteRestoration is deprecated. Use two-phase approach for data safety.');
+  logger.warn('performCompleteRestoration is deprecated. Use two-phase approach for data safety.');
 
   const memorialData = generateMemorialDataOnly(userState, lanternPDFUrl);
   await performHardDelete();
@@ -186,7 +189,7 @@ export function getMemorial(): MemorialData | null {
       return JSON.parse(data) as MemorialData;
     }
   } catch (e) {
-    console.error('[SecureScrub] Failed to load memorial:', e);
+    logger.error('Failed to load memorial:', e);
   }
   return null;
 }

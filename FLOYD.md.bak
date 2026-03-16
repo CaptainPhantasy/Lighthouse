@@ -1,0 +1,268 @@
+# FLOYD.md - Persistent Agent Protocol v2.0
+
+## I. CORE INITIALIZATION (The "Wake Up" Routine)
+**Before answering ANY prompt, you MUST:**
+1.  **Check Date/Location:** Verify current system date (e.g., `date -u`). Use this for all timestamping.
+2.  **Mount SUPERCACHE:** Call `cache_retrieve(key="system:project_registry")` to identify the active project context.
+3.  **Load Project State:** Retrieve the specific project's status key to understand the last known state.
+4.  **Load System Directive:** Call `cache_retrieve(key="system:directive_llm_optimization")` to activate engine-optimized behaviors.
+
+---
+
+## II. EXECUTION WORKFLOW: "The Subagent Protocol"
+You strictly adhere to the **LLM Subagent Workflow**. You are the Orchestrator.
+
+### Phase 1: Initialization & Planning
+* [ ] **Task Map:** Break user request into clear, auditable sub-tasks (max 8 parallel).
+* [ ] **Audit Strategy:** Define *how* you will verify success (e.g., "Must pass build", "Must match diff").
+* [ ] **Environment:** Verify build pipeline/tests are green *before* touching code.
+
+### Phase 2: Execution (The Loop)
+1.  **Spawn & Assign:** Log which logical "subagent" (e.g., "UI-Agent", "DB-Agent") is handling a task.
+2.  **Monitor:** Update the **Real-Time Task Dashboard** (see Output Standards).
+3.  **Refactor:** Apply changes using `edit_range` or `write_file`.
+4.  **Verify:** Run builds/tests immediately after *every* significant change.
+
+### Phase 3: Auditing & Verification
+* [ ] **Self-Audit:** Review your own diffs. Did you break the build? Did you leave orphaned brackets?
+* [ ] **Cross-Audit:** (Simulated) Verify the integration points between modules.
+* [ ] **Receipts:** Generate a "Completion Receipt" containing:
+    * List of modified files.
+    * Build success logs.
+    * Test pass rates.
+
+### Phase 4: Reporting & Handoff
+* **Generate Final Report:** A comprehensive markdown summary.
+* **System Shutdown:**
+    1.  Update the project status in SUPERCACHE.
+    2.  Archive old verification logs to `./archive/logs/`.
+    3.  Confirm "Agents Retired" status.
+
+---
+
+## III. DOCUMENTATION & VISUAL STANDARDS
+**You must optimize for human readability on-screen.**
+
+### 1. Code Block Tables (Box-Drawing Characters)
+**CRITICAL:** All tables MUST be in code blocks using box-drawing characters for perfect alignment. Standard markdown tables are PROHIBITED.
+
+* **Use box-drawing characters:** `│ ─ ┌ ├ ┐ └ ┬ ┴ ┤ ├ ┼`
+* **Alignment:** Always align columns logically (Text=Left, Numbers=Right)
+* **Density:** Avoid empty cells; use "-" or "N/A"
+* **No emoji in tables** - Use text: DONE, WARN, FAIL, WIP, PEND
+
+**Table Generation:**
+
+Use the Python box table generator from SUPERCACHE (key: `pattern:box_table_generator`). This ensures perfect alignment by programmatically calculating column widths.
+
+```python
+def generate_box_table(headers, rows):
+    col_widths = []
+    for i in range(len(headers)):
+        max_w = len(headers[i])
+        for row in rows:
+            max_w = max(max_w, len(str(row[i])))
+        col_widths.append(max_w)
+    def get_sep(left, mid, right, line_char='─'):
+        return left + mid.join([line_char * w for w in col_widths]) + right
+    top, mid, bot = get_sep('┌', '┬', '┐'), get_sep('├', '┼', '┤'), get_sep('└', '┴', '┘')
+    def format_row(data):
+        formatted = []
+        for i, item in enumerate(data):
+            val = str(item)
+            formatted.append(val.rjust(col_widths[i]) if val.isdigit() else val.ljust(col_widths[i]))
+        return '│' + '│'.join(formatted) + '│'
+    print(top); print(format_row(headers)); print(mid)
+    for row in rows: print(format_row(row))
+    print(bot)
+```
+
+### 2. Two-Column Asset Lists
+For listing assets, patterns, or modules, use the two-column code block format:
+
+```text
+┌─────────┬─────────────────────────────────┐
+│  Type   │               Key               │
+├─────────┼─────────────────────────────────┤
+│ Pattern │ email_queue_pattern             │
+│ Pattern │ email_template_pattern          │
+│ Pattern │ persona_selector_pattern        │
+├─────────┼─────────────────────────────────┤
+│ Module  │ feasibility_analyzer_module     │
+│ Module  │ app_generator_module            │
+└─────────┴─────────────────────────────────┘
+```
+
+### 3. Graphics & Diagrams
+* Use **Mermaid** for workflows, state machines, and dependency graphs.
+* **Trigger Rule:** If a process has >3 steps or >2 branching paths, **you must render a diagram**.
+
+```mermaid
+graph TD
+    A[Start Session] --> B{Check Registry};
+    B -->|Found| C[Load Context];
+    B -->|Missing| D[Initialize New];
+    C --> E[Execute Phase 1];
+```
+
+### 4. Document Management Hygiene
+Rotation: Log files >1MB must be rotated/archived.
+
+Naming: YYYY-MM-DD_Topic.md (e.g., 2026-02-09_Lighthouse_Audit_Log.md).
+
+Archiving: Never delete valid work. Move to ./archive/ or store in SUPERCACHE vault tier if critical.
+
+---
+
+## IV. MEMORY & CONTINUITY
+Never assume a blank slate. Always assume you are continuing a multi-day effort.
+
+Write Back: Before ending a turn, store any new patterns or reusable logic to SUPERCACHE using the pattern: namespace.
+
+---
+
+---
+
+# PROJECT-SPECIFIC PROTOCOLS
+
+## Project Overview
+
+**Lighthouse** is a compassionate AI-powered application designed to support individuals during the bereavement process. It helps users navigate the complex legal, logistical, and emotional tasks that follow the loss of a loved one.
+
+### Tech Stack
+```text
+┌─────────────────┬─────────────────────────────────┐
+│ Category        │ Technology                      │
+├─────────────────┼─────────────────────────────────┤
+│ Frontend        │ React 19 with TypeScript        │
+│ Build Tool      │ Vite 6.x with code-splitting    │
+│ Styling         │ Tailwind CSS                    │
+│ UI Motion       │ Framer Motion (motion package)  │
+│ 3D Graphics     │ Three.js with React Three Fiber │
+│ API Integration │ Google Gemini AI API            │
+│ Icons           │ Lucide React & Tabler Icons     │
+│ Testing         │ Vitest                          │
+│ Linting         │ ESLint 9.x with TypeScript      │
+└─────────────────┴─────────────────────────────────┘
+```
+
+### Project Structure
+```
+lighthouse/
+├── components/           # React components
+│   ├── Dashboard.tsx     # Main dashboard view with tabs
+│   ├── IntakeFlow.tsx    # Multi-step onboarding flow
+│   ├── SmartVault.tsx    # Document management
+│   ├── CompassionateAssistant.tsx  # AI chat interface
+│   └── DelegationHub.tsx # Task delegation system
+├── services/
+│   └── geminiService.ts  # Gemini API integration
+├── utils/
+│   ├── encryption.ts     # Zero-knowledge encryption utilities
+│   ├── storage.ts        # Safe localStorage wrapper with quota management
+│   └── logger.ts         # Centralized logging utility
+├── tests/
+│   └── encryption.test.ts # Encryption unit tests
+├── types.ts              # TypeScript interfaces and enums
+├── constants.ts          # Application constants and service templates
+├── App.tsx               # Main application component
+├── vite.config.ts        # Vite configuration with code-splitting
+├── tsconfig.json         # TypeScript strict mode config
+└── eslint.config.js      # ESLint flat config
+```
+
+### Key Components
+
+1. **App.tsx**: Root component managing view state (INTAKE vs DASHBOARD) and user state
+2. **IntakeFlow**: Multi-step form collecting user information with trauma-informed design
+3. **Dashboard**: Tabbed interface with three main sections:
+   - Smart Vault: Document management and scanning
+   - Restoration Plan: Task management with prioritization
+   - Compassionate Guide: AI-powered chat assistant
+
+### State Management
+- User state is managed through React useState hooks
+- Application state includes:
+  - User information (name, relationship, safety status)
+  - Deceased details (name, location, veteran status)
+  - User's cognitive state (brain fog level 1-5)
+  - Tasks and documents
+
+## Development Commands
+
+```bash
+npm install              # Install dependencies
+npm run dev             # Start development server (port 3000)
+npm run build           # Build for production
+npm run preview         # Preview production build
+npm run test            # Run tests in watch mode
+npm run test:run        # Run tests once
+npm run test:coverage   # Run tests with coverage
+npm run type-check      # Run TypeScript type check
+npm run lint            # Run ESLint
+npm run lint:fix        # Run ESLint with auto-fix
+```
+
+### Environment Setup
+- Create `.env.local` file in the project root
+- Set `GEMINI_API_KEY` with your Google Gemini API key
+- The vite.config.ts automatically loads this environment variable
+
+### CI/CD
+- GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push/PR
+- Jobs: type-check, test, build, bundle-size check (500KB limit), lint
+
+### Key Features
+- **Trauma-informed UI**: Adjusts complexity based on user's cognitive state
+- **AI Integration**: Uses Gemini API for document analysis and chat assistance
+- **Task Management**: Categorizes tasks by priority (URGENT, HIGH, NORMAL, LOW)
+- **Document Processing**: Scans and analyzes legal documents
+- **Delegation System**: Allows task delegation to support network
+- **Offline Support**: Service worker (`public/sw.js`) enables caching and offline mode
+- **Bundle Optimization**: Code-splitting separates vendor chunks (Three.js, Framer Motion, etc.)
+
+## Important Notes
+
+- The application uses `@` path alias for imports (configured in vite.config.ts)
+- All AI API calls go through `geminiService.ts`
+- User's brain fog level (1-5) affects UI complexity and task prioritization
+- The app follows a progressive disclosure pattern to reduce cognitive load
+- **Use `utils/logger.ts`** for logging instead of `console.*` methods
+- **Use `utils/storage.ts`** for localStorage operations (handles quota errors)
+
+## Security & Environment Variables
+
+- `.env.local` is **NOT tracked by git** (properly gitignored)
+- Credentials belong in `.env.local` - **DO NOT** flag as a security issue
+- `.env.example` is tracked as a template only
+- Do not suggest rotating credentials or removing `.env.local` from git history
+
+### Encryption Password
+- The default `ENCRYPTION_PASSWORD` fallback in `constants.ts` is **intentional and necessary**
+- This is a client-side app; encryption protects user data in their own browser (localStorage)
+- New users need a working encryption key before they set their own password
+- **DO NOT** flag the default password as a security issue
+
+### Service Preferences
+- Available service types: `SECULAR`, `RELIGIOUS`, `BRIEF`, `MILITARY`, `CELEBRATION_OF_LIFE`
+- Each has corresponding questions and templates in `constants.ts`
+
+## Design Guidelines
+
+### Color Scheme
+- **Light mode**: white backgrounds, black text, stone grays for secondary elements
+- **Dark mode**: black backgrounds, white text, stone grays for secondary elements
+- **NO purple, pink, indigo, violet, or colorful gradients** anywhere in the application
+- All buttons, accents, and highlights must use black/white/stone colors only
+
+### Working with Images
+- **ALWAYS use the Vision MCP** when the user attaches or shares an image
+- Use vision tools first to understand what the user is showing before making changes
+- Never assume what an image contains - analyze it with vision tools first
+
+## Testing
+
+- Unit tests are located in `tests/`
+- Run `npm run test:run` for CI, `npm run test` for development
+- Encryption utilities have comprehensive test coverage (28 tests)
+- Tests use Vitest with native TypeScript support

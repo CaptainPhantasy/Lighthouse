@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { VoicePreferences } from '../types';
+import { createLogger } from '../utils/logger';
 
+const logger = createLogger('VoicePreferenceContext');
 const VOICE_PREFERENCES_KEY = 'lighthouse_voice_preferences';
 
 interface VoicePreferenceContextValue {
@@ -26,7 +28,7 @@ const loadPreferences = (): VoicePreferences => {
       return { ...defaultPreferences, ...JSON.parse(saved) };
     }
   } catch (e) {
-    console.error('[VoicePreferenceContext] Failed to load preferences:', e);
+    logger.error('Failed to load preferences:', e);
   }
   return defaultPreferences;
 };
@@ -36,7 +38,7 @@ const savePreferences = (prefs: VoicePreferences) => {
   try {
     localStorage.setItem(VOICE_PREFERENCES_KEY, JSON.stringify(prefs));
   } catch (e) {
-    console.error('[VoicePreferenceContext] Failed to save preferences:', e);
+    logger.error('Failed to save preferences:', e);
   }
 };
 

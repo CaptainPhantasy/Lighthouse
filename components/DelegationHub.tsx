@@ -11,6 +11,9 @@ import { useSpeechToText } from '../hooks/useSpeechToText';
 import { useTextToSpeech } from '../hooks/useTextToSpeech';
 import { useVoicePreferences } from '../contexts/VoicePreferenceContext';
 import { VoiceToggle } from './voice';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('DelegationHub');
 
 // Track generated support links to avoid duplicates
 const taskLinkCache = new Map<string, string>();
@@ -166,7 +169,7 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
         showToast(`Link copied! Send this to a friend to let them handle this task: ${fallbackLink}`);
       }
     } catch (err) {
-      console.error('Failed to create support request:', err);
+      logger.error('Failed to create support request:', err);
       // Fallback to static link
       const fallbackLink = `https://lighthouse.app/task/${taskId}/delegate`;
       taskLinkCache.set(taskId, fallbackLink);
@@ -237,7 +240,7 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
         setShareMessage(message);
         setEditedMessage(message);
       } catch (err) {
-        console.error('Failed to generate share message:', err);
+        logger.error('Failed to generate share message:', err);
         // Set a default message if generation fails
         const deceasedName = userState.deceasedName || 'your loved one';
         const fallbackMessage = `Hi everyone, as we navigate this difficult time after ${deceasedName}'s passing, I wanted to share a way you can help. I've created a support link where you can see what needs to be done and pick up tasks that would mean a lot to me. Here's the link: ${result.magicLink} Thank you for being here for me.`;
@@ -247,7 +250,7 @@ const DelegationHub: React.FC<DelegationHubProps> = ({ userState, tasks }) => {
         setIsGeneratingMessage(false);
       }
     } catch (err) {
-      console.error('Failed to create support link:', err);
+      logger.error('Failed to create support link:', err);
       showToast('Could not generate link. Please try again.');
     } finally {
       setIsGeneratingLink(false);

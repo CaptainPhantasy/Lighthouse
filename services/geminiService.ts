@@ -373,7 +373,7 @@ export const findFuneralHomes = async (latitude: number, longitude: number) => {
     if (funeralHomes && funeralHomes.length > 0) {
       // Format with Gemini for compassionate presentation
       const homesList = funeralHomes
-        .map((h, i) => `${i + 1}. **${h.name}**\n   ${h.address}`)
+        .map((h: { name: string; address: string }, i: number) => `${i + 1}. **${h.name}**\n   ${h.address}`)
         .join('\n\n');
 
       const compassionateResponse = await ai.models.generateContent({
@@ -472,20 +472,20 @@ Research and compile a comprehensive transport itinerary with:
 
 5. TIMELINE: How long the process typically takes
 
-Return ONLY valid JSON:
+Return ONLY valid JSON (replace EXAMPLE values with actual research):
 {
-  "summary": "2-3 sentence overview",
-  "airlines": [{"name": "Airline", "humContact": "phone", "requirements": ["req1", "req2"]}],
-  "funeralHomes": [{"name": "Name", "phone": "phone", "location": "address"}],
-  "restrictions": ["restriction1", "restriction2"],
-  "estimatedCost": "$X,XXX-$X,XXX",
-  "timeline": "X-X days"
+  "summary": "2-3 sentence overview of the route and logistics",
+  "airlines": [{"name": "Airline Name", "humContact": "phone-number", "requirements": ["req1", "req2"]}],
+  "funeralHomes": [{"name": "Funeral Home Name", "phone": "phone-number", "location": "full-address"}],
+  "restrictions": ["specific-restriction-1", "specific-restriction-2"],
+  "estimatedCost": "$1,500-$4,500 (actual researched range)",
+  "timeline": "2-5 business days (actual researched timeline)"
 }`
         }]
       },
       config: {
         responseMimeType: 'application/json',
-        tools: [{ googleSearch: { dynamicRetrievalConfig: { mode: 'MODE_DYNAMIC' } } }],
+        tools: [{ googleSearch: { dynamicRetrievalConfig: { mode: 'MODE_DYNAMIC' } } } as any],
         temperature: 0.2,
       }
     });
@@ -958,8 +958,7 @@ The summary field MUST be optimized for Text-to-Speech: short sentences, clear p
         tools: [{ googleSearch: {} }],
         temperature: 0.1,
         // Phase 2: Enable high thinking level for zero-hallucination accuracy
-        thinking_level: 'high',
-      }
+      } as any
     });
 
     const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -1149,8 +1148,7 @@ export async function getTransportLaws(location: string): Promise<{
         tools: [{ googleSearch: {} }],
         temperature: 0.1,
         // Phase 2: Enable high thinking level for zero-hallucination accuracy
-        thinking_level: 'high',
-      }
+      } as any
     });
 
     const text = response.candidates?.[0]?.content?.parts?.[0]?.text;

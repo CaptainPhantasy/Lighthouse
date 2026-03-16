@@ -1,4 +1,7 @@
 import { supabase, SupportRequest, SUPPORT_REQUESTS_TABLE } from './supabaseClient';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('SupportRequest');
 
 // Supabase Edge Function URL
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
@@ -40,7 +43,7 @@ export async function sendSupportRequest(
     const data = await response.json();
     return { success: true, magicLink: data.magicLink, data };
   } catch (error) {
-    console.error('Support Request Error:', error);
+    logger.error('Support Request Error:', error);
     return { success: false, error };
   }
 }
@@ -66,7 +69,7 @@ export async function getSupportRequest(requestId: string) {
 
     return { success: true, data };
   } catch (error) {
-    console.error('Fetch Request Error:', error);
+    logger.error('Fetch Request Error:', error);
     return { success: false, error };
   }
 }
@@ -95,7 +98,7 @@ export async function updateSupportRequestStatus(
 
     return { success: true };
   } catch (error) {
-    console.error('Update Request Error:', error);
+    logger.error('Update Request Error:', error);
     return { success: false, error };
   }
 }
@@ -118,7 +121,7 @@ export async function getUserSupportRequests(userId: string) {
 
     return { success: true, data };
   } catch (error) {
-    console.error('Fetch User Requests Error:', error);
+    logger.error('Fetch User Requests Error:', error);
     return { success: false, error };
   }
 }

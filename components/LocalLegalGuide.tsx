@@ -3,6 +3,9 @@ import { getLocalProbateRequirements, getDualJurisdictionProbate, DualJurisdicti
 import { UserState } from '../types';
 import { MapPin, Clock, FileText, AlertTriangle, CheckCircle, Loader2, ArrowRight, GitCompare, Layers } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('LocalLegalGuide');
 
 interface LocalLegalGuideProps {
   userState: UserState;
@@ -33,7 +36,7 @@ const LocalLegalGuide: React.FC<LocalLegalGuideProps> = ({ userState }) => {
     timeframe: '',
     documents: [],
     isLoading: true,
-    error: null
+    error: undefined
   });
 
   const [dualJurisdictionInfo, setDualJurisdictionInfo] = useState<DualJurisdictionInfo | null>(null);
@@ -47,13 +50,13 @@ const LocalLegalGuide: React.FC<LocalLegalGuideProps> = ({ userState }) => {
     const fetchLegalInfo = async () => {
       if (!userState.deceasedLocation) return;
 
-      setProbateInfo(prev => ({ ...prev, isLoading: true, error: null }));
+      setProbateInfo(prev => ({ ...prev, isLoading: true, error: undefined }));
       setDualJurisdictionInfo(null);
 
       try {
         // Phase 2: Dual-Jurisdiction Engine
         if (locationsDiffer && userState.userLocation) {
-          console.log('[LocalLegalGuide] Using Dual-Jurisdiction analysis');
+          logger.info('Using Dual-Jurisdiction analysis');
           const dualResult = await getDualJurisdictionProbate(
             userState.userLocation,
             userState.deceasedLocation

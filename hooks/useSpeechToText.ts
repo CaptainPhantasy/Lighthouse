@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { transcribeAudioWithGemini } from '../services/geminiService';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('useSpeechToText');
 
 interface SpeechToTextOptions {
   continuous?: boolean;
@@ -18,23 +20,22 @@ interface SpeechToTextHook {
 }
 
 /**
- * Speech-to-Text Hook with Google Cloud STT + Browser Fallback
+ * Speech-to-Text Hook using Browser SpeechRecognition API
  *
- * Primary: Google Cloud Speech-to-Text API (high accuracy, transcribes on stop)
- * Fallback: Browser SpeechRecognition (real-time interim results)
- * Works in all modern browsers.
+ * Uses the native Web Speech API for speech-to-text.
+ * Provides real-time transcription with interim results.
+ * Works in Chrome, Edge, and Safari.
  */
 export const useSpeechToText = (): SpeechToTextHook => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const cleanupRef = useRef<(() => Promise<void>) | null>(null);
   const recognitionRef = useRef<any>(null);
-  const usingCloudSttRef = useRef(false);
+  const finalTranscriptRef = useRef('');
   const isMountedRef = useRef(true);
 
-  // Check for microphone access
-  const browserSupportsSpeechRecognition = typeof navigator !== 'undefined' && 'mediaDevices' in navigator;
+  // Check for browser SpeechRecognition API support
+  const browserSupportsSpeechRecognition = 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window;
 
   // Cleanup on unmount
   useEffect(() => {
@@ -55,19 +56,22 @@ export const useSpeechToText = (): SpeechToTextHook => {
     };
   }, []);
 
-  // Browser SpeechRecognition fallback (real-time interim results)
-  const startBrowserRecognition = useCallback((options: SpeechToTextOptions) => {
+  // Start listening using browser SpeechRecognition
+  const startListening = useCallback((options: SpeechToTextOptions = {}) => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       if (isMountedRef.current) {
-        setError('Speech recognition not supported in this browser.');
+        setError('Speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari.');
         setIsListening(false);
       }
       return;
     }
 
-    console.log('[useSpeechToText] Using browser SpeechRecognition fallback');
+    // Reset state
+    setError(null);
+    finalTranscriptRef.current = '';
+    setTranscript('');
 
     // Clean up any existing recognition
     if (recognitionRef.current) {
@@ -81,15 +85,19 @@ export const useSpeechToText = (): SpeechToTextHook => {
       }
     }
 
+    logger.info('Starting browser SpeechRecognition');
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
 
+    // Configure recognition
     recognition.continuous = options.continuous ?? false;
     recognition.interimResults = options.interimResults ?? true;
     recognition.lang = options.language || 'en-US';
+    recognition.maxAlternatives = 1;
 
     recognition.onresult = (event: any) => {
       if (!isMountedRef.current) return;
+
       let interimTranscript = '';
       let finalTranscript = '';
 
@@ -102,22 +110,48 @@ export const useSpeechToText = (): SpeechToTextHook => {
         }
       }
 
-      setTranscript(finalTranscript || interimTranscript);
+      // Accumulate final transcripts and show interim results
+      if (finalTranscript) {
+        finalTranscriptRef.current += finalTranscript;
+        setTranscript(finalTranscriptRef.current.trim());
+      } else if (interimTranscript) {
+        // Show interim results appended to final transcript
+        const combined = finalTranscriptRef.current + interimTranscript;
+        setTranscript(combined.trim());
+      }
     };
 
     recognition.onerror = (event: any) => {
       if (!isMountedRef.current) return;
-      console.error('[Browser STT] Error:', event.error);
-      if (event.error === 'not-allowed') {
-        setError('Microphone access denied. Please allow microphone access.');
-      } else {
-        setError(event.error || 'Speech recognition error');
+      logger.error('[SpeechRecognition] Error:', event.error);
+
+      let errorMessage = 'Speech recognition error.';
+      switch (event.error) {
+        case 'not-allowed':
+          errorMessage = 'Microphone access denied. Please allow microphone access in your browser settings.';
+          break;
+        case 'no-speech':
+          errorMessage = 'No speech detected. Please try again.';
+          break;
+        case 'audio-capture':
+          errorMessage = 'No microphone found. Please connect a microphone.';
+          break;
+        case 'network':
+          errorMessage = 'Network error. Please check your connection.';
+          break;
+        default:
+          errorMessage = `Speech recognition error: ${event.error}`;
       }
+
+      setError(errorMessage);
       setIsListening(false);
     };
 
     recognition.onend = () => {
       if (!isMountedRef.current) return;
+      logger.info('[SpeechRecognition] Ended');
+
+      // If not continuous, stop listening
       if (!recognition.continuous) {
         setIsListening(false);
       }
@@ -127,86 +161,8 @@ export const useSpeechToText = (): SpeechToTextHook => {
     setIsListening(true);
   }, []);
 
-  const startListening = useCallback(async (options: SpeechToTextOptions = {}) => {
-    if (!browserSupportsSpeechRecognition) {
-      if (isMountedRef.current) {
-        setError('Microphone access is not available in this browser.');
-      }
-      return;
-    }
-
-    // Reset state
-    setError(null);
-    setTranscript('');
-    setIsListening(true);
-
-    // Check if browser SpeechRecognition is available for fallback
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const hasBrowserFallback = !!SpeechRecognition;
-
-    // Try Google Cloud STT first (better accuracy, transcribes on stop)
-    try {
-      console.log('[useSpeechToText] Attempting Google Cloud Speech-to-Text...');
-      usingCloudSttRef.current = true;
-
-      const cleanup = await transcribeAudioWithGemini({
-        language: options.language || 'en-US',
-        onTranscript: (text: string) => {
-          if (!isMountedRef.current) return;
-          console.log('[useSpeechToText] Cloud STT transcript received:', text);
-          setTranscript(text);
-          setIsListening(false); // Cloud STT returns final result
-        },
-        onComplete: (finalText: string) => {
-          if (!isMountedRef.current) return;
-          console.log('[useSpeechToText] Cloud STT complete:', finalText);
-          setTranscript(finalText);
-          setIsListening(false);
-        },
-        onError: (err: string) => {
-          if (!isMountedRef.current) return;
-          console.warn('[useSpeechToText] Cloud STT error, falling back to browser:', err);
-          usingCloudSttRef.current = false;
-          // Auto-fallback to browser recognition
-          if (hasBrowserFallback) {
-            startBrowserRecognition(options);
-          } else {
-            setError('Speech recognition failed. Please type your response.');
-            setIsListening(false);
-          }
-        },
-      });
-
-      cleanupRef.current = cleanup;
-    } catch (err: any) {
-      console.error('[useSpeechToText] Cloud STT failed, using browser fallback:', err);
-      usingCloudSttRef.current = false;
-      // Fall back to browser recognition
-      if (hasBrowserFallback) {
-        startBrowserRecognition(options);
-      } else {
-        if (isMountedRef.current) {
-          setError('Speech recognition failed. Please type your response.');
-          setIsListening(false);
-        }
-      }
-    }
-  }, [browserSupportsSpeechRecognition, startBrowserRecognition]);
-
-  const stopListening = useCallback(async () => {
-    console.log('[useSpeechToText] stopListening called, usingCloudStt:', usingCloudSttRef.current);
-
-    // Stop Cloud STT
-    if (cleanupRef.current && usingCloudSttRef.current) {
-      try {
-        console.log('[useSpeechToText] Stopping Cloud STT...');
-        await cleanupRef.current();
-      } catch (e) {
-        console.error('[useSpeechToText] Error stopping Cloud STT:', e);
-      }
-      cleanupRef.current = null;
-      usingCloudSttRef.current = false;
-    }
+  const stopListening = useCallback(() => {
+    logger.info('stopListening called');
 
     // Stop browser recognition and clean up event listeners
     if (recognitionRef.current) {
@@ -217,7 +173,7 @@ export const useSpeechToText = (): SpeechToTextHook => {
         recognitionRef.current.stop();
         recognitionRef.current.abort();
       } catch (e) {
-        // Already stopped or not started
+        // Already stopped or not started - ignore
       }
       recognitionRef.current = null;
     }
@@ -228,6 +184,7 @@ export const useSpeechToText = (): SpeechToTextHook => {
   }, []);
 
   const clearTranscript = useCallback(() => {
+    finalTranscriptRef.current = '';
     setTranscript('');
     setError(null);
   }, []);

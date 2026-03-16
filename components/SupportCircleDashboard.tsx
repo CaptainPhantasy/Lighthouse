@@ -7,6 +7,9 @@ import { useSpeechToText } from '../hooks/useSpeechToText';
 import { useTextToSpeech } from '../hooks/useTextToSpeech';
 import { useVoicePreferences } from '../contexts/VoicePreferenceContext';
 import { VoiceToggle } from './voice';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('SupportCircleDashboard');
 
 interface SupportCircleDashboardProps {
   userState: UserState;
@@ -142,7 +145,7 @@ const SupportCircleDashboard: React.FC<SupportCircleDashboardProps> = ({
         alert('Unable to play eulogy. Please try again.');
       }
     } catch (error) {
-      console.error('Error playing eulogy:', error);
+      logger.error('Error playing eulogy:', error);
       alert('Unable to play eulogy. Please try again.');
     }
   };

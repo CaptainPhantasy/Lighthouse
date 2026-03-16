@@ -25,6 +25,9 @@ import { ENCRYPTION_PASSWORD } from './constants';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { VoicePreferenceProvider } from './contexts/VoicePreferenceContext';
 import { type NarrativeCheckpoint } from './hooks/useCheckpointedNarrative';
+import { createLogger } from './utils/logger';
+
+const logger = createLogger('App');
 
 // ============================================================================
 // VIEW VALIDATION - Prevents blank screen from invalid localStorage state
@@ -36,12 +39,12 @@ function isValidView(value: string): value is AppView {
 
 function sanitizeView(savedView: string | null): AppView {
   if (savedView && isValidView(savedView)) {
-    console.log('[App] Loaded valid view from localStorage:', savedView);
+    logger.info('Loaded valid view from localStorage:', savedView);
     return savedView as AppView;
   }
   // Reset to safe default if view is invalid or missing
   if (savedView && !isValidView(savedView)) {
-    console.warn('[App] Invalid view in localStorage, resetting to SENTIENT_GATEWAY:', savedView);
+    logger.warn('Invalid view in localStorage, resetting to SENTIENT_GATEWAY:', savedView);
     localStorage.removeItem('lighthouse_view');
   }
   return AppView.SENTIENT_GATEWAY;
@@ -57,7 +60,7 @@ const AppContent: React.FC = () => {
 
   // Clear all app data and start over
   const handleStartOver = () => {
-    console.log('[App] Starting over - clearing all data');
+    logger.info('Starting over - clearing all data');
     localStorage.removeItem('lighthouse_view');
     localStorage.removeItem('userState');
     localStorage.removeItem('documentScans');
@@ -103,11 +106,11 @@ const AppContent: React.FC = () => {
         // Only restore if less than 24 hours old
         const age = Date.now() - checkpoint.lastUpdate;
         if (age < 24 * 60 * 60 * 1000) {
-          setRestoredCheckpoint(checkpoint);
+          setTimeout(() => setRestoredCheckpoint(checkpoint), 0);
         }
       }
     } catch (e) {
-      console.error('[App] Failed to load checkpoint:', e);
+      logger.error('Failed to load checkpoint:', e);
     }
   }, [view]);
 
@@ -117,7 +120,7 @@ const AppContent: React.FC = () => {
     // Let the Volunteer Hijack take over - don't restore saved state.
     if (window.location.pathname.startsWith('/volunteer/')) {
       // Skip loading, dismiss splash immediately
-      setSplashScreenVisible(false);
+      setTimeout(() => setSplashScreenVisible(false), 0);
       return;
     }
 
@@ -147,7 +150,7 @@ const AppContent: React.FC = () => {
             }
             setUserState(parsed);
           } catch (error) {
-            console.error('Failed to decrypt user state:', error);
+            logger.error('Failed to decrypt user state:', error);
             // If decryption fails, use initial state
             setUserState(INITIAL_USER_STATE);
           }
@@ -161,7 +164,7 @@ const AppContent: React.FC = () => {
               : JSON.parse(savedDocumentScans);
             setDocumentScans(parsed);
           } catch (error) {
-            console.error('Failed to decrypt document scans:', error);
+            logger.error('Failed to decrypt document scans:', error);
             setDocumentScans([]);
           }
         }
@@ -174,7 +177,7 @@ const AppContent: React.FC = () => {
               : JSON.parse(savedTasks);
             setTasks(parsed);
           } catch (error) {
-            console.error('Failed to decrypt tasks:', error);
+            logger.error('Failed to decrypt tasks:', error);
             setTasks([]);
           }
         }
@@ -187,11 +190,11 @@ const AppContent: React.FC = () => {
               : JSON.parse(savedServiceOutline);
             setUserState(prev => ({ ...prev, serviceOutline: parsed }));
           } catch (error) {
-            console.error('Failed to decrypt service outline:', error);
+            logger.error('Failed to decrypt service outline:', error);
           }
         }
       } catch (error) {
-        console.error('Error loading state:', error);
+        logger.error('Error loading state:', error);
       }
       // Note: Don't dismiss splash here - let the SplashScreen component handle its own timing
     };
@@ -218,7 +221,7 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     if (userState.name) { // Only save after intake is started
       // Encrypt sensitive data before saving
-      const sanitizedUserState = sanitizeData(userState);
+      const sanitizedUserState = sanitizeData(userState as unknown as Record<string, unknown>);
       let cancelled = false;
 
       encryptObject(sanitizedUserState, ENCRYPTION_PASSWORD)
@@ -227,17 +230,17 @@ const AppContent: React.FC = () => {
             try {
               localStorage.setItem('userState', JSON.stringify(encrypted));
             } catch (e) {
-              console.error('localStorage quota exceeded or error:', e);
+              logger.error('localStorage quota exceeded or error:', e);
             }
           }
         })
         .catch(error => {
           if (!cancelled) {
-            console.error('Failed to encrypt user state:', error);
+            logger.error('Failed to encrypt user state:', error);
             try {
               localStorage.setItem('userState', JSON.stringify(sanitizedUserState));
             } catch (e) {
-              console.error('localStorage error:', e);
+              logger.error('localStorage error:', e);
             }
           }
         });
@@ -256,16 +259,16 @@ const AppContent: React.FC = () => {
           try {
             localStorage.setItem('tasks', JSON.stringify(result));
           } catch (e) {
-            console.error('localStorage quota exceeded or error:', e);
+            logger.error('localStorage quota exceeded or error:', e);
           }
         }
       }).catch(error => {
         if (!cancelled) {
-          console.error('Failed to encrypt tasks:', error);
+          logger.error('Failed to encrypt tasks:', error);
           try {
             localStorage.setItem('tasks', JSON.stringify(tasks));
           } catch (e) {
-            console.error('localStorage error:', e);
+            logger.error('localStorage error:', e);
           }
         }
       });
@@ -284,16 +287,16 @@ const AppContent: React.FC = () => {
           try {
             localStorage.setItem('documentScans', JSON.stringify(result));
           } catch (e) {
-            console.error('localStorage quota exceeded or error:', e);
+            logger.error('localStorage quota exceeded or error:', e);
           }
         }
       }).catch(error => {
         if (!cancelled) {
-          console.error('Failed to encrypt document scans:', error);
+          logger.error('Failed to encrypt document scans:', error);
           try {
             localStorage.setItem('documentScans', JSON.stringify(documentScans));
           } catch (e) {
-            console.error('localStorage error:', e);
+            logger.error('localStorage error:', e);
           }
         }
       });
@@ -306,8 +309,10 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     const pathParts = window.location.pathname.split('/');
     if (pathParts[1] === 'volunteer' && pathParts[2]) {
-      setVolunteerRequestId(pathParts[2]);
-      setView(AppView.VOLUNTEER);
+      setTimeout(() => {
+        setVolunteerRequestId(pathParts[2]);
+        setView(AppView.VOLUNTEER);
+      }, 0);
     }
   }, []);
 
@@ -325,14 +330,14 @@ const AppContent: React.FC = () => {
 
   // Phase 2: Sentient onboarding handlers
   const handleGatewayEnter = (mode: 'voice' | 'discretion') => {
-    console.log('[App] handleGatewayEnter called with mode:', mode);
+    logger.info('handleGatewayEnter called with mode:', mode);
     setVoiceMode(mode);
     setView(AppView.VOICE_INTRO);
     localStorage.setItem('lighthouse_view', AppView.VOICE_INTRO);
   };
 
   const handleResumeCheckpoint = () => {
-    console.log('[App] handleResumeCheckpoint called');
+    logger.info('handleResumeCheckpoint called');
     setView(AppView.VOICE_INTRO);
     localStorage.setItem('lighthouse_view', AppView.VOICE_INTRO);
   };
@@ -375,7 +380,7 @@ const AppContent: React.FC = () => {
   // ============================================================================
 
   const handlePathSelect = (path: 'bereaved' | 'sentient') => {
-    console.log('[App] handlePathSelect called with path:', path);
+    logger.info('handlePathSelect called with path:', path);
     if (path === 'sentient') {
       setView(AppView.SENTIENT_INTAKE);
       localStorage.setItem('lighthouse_view', AppView.SENTIENT_INTAKE);
@@ -431,7 +436,7 @@ const AppContent: React.FC = () => {
           </button>
 
           {(() => {
-            console.log('[App] Rendering view:', view);
+            logger.info('Rendering view:', view);
             return (
               <ErrorBoundary key={view}>
               {view === AppView.SENTIENT_GATEWAY ? (
@@ -465,7 +470,7 @@ const AppContent: React.FC = () => {
                   onComplete={handleTransitionComplete}
                 />
               ) : view === AppView.VOLUNTEER ? (
-                <VolunteerPage requestId={volunteerRequestId} />
+                <VolunteerPage requestId={volunteerRequestId ?? undefined} />
               ) : view === AppView.DASHBOARD ? (
                 <Dashboard
                   userState={userState}

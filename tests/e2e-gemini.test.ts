@@ -93,16 +93,16 @@ describe('Gemini AI Service E2E Tests', () => {
 
         // Accept: Mapbox success (>50 chars), Google Maps fallback, or graceful error message
         const hasValidResponse =
-          result.length > 50 ||
-          result.includes('funeral home') ||
-          result.includes('options') ||
-          result.includes("couldn't load");
+          (result?.length ?? 0) > 50 ||
+          (result ?? '').includes('funeral home') ||
+          (result ?? '').includes('options') ||
+          (result ?? '').includes("couldn't load");
 
         expect(hasValidResponse).toBe(true);
 
         console.log(`\n✓ Funeral homes search completed`);
-        console.log(`  Response length: ${result.length} chars`);
-        console.log(`  Preview: ${result.substring(0, 150)}...`);
+        console.log(`  Response length: ${result?.length ?? 0} chars`);
+        console.log(`  Preview: ${result?.substring(0, 150) ?? 'N/A'}...`);
       },
       TEST_TIMEOUT
     );

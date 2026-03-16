@@ -6,6 +6,9 @@ import { AuroraBackground } from './ui/aurora-background';
 import ColourfulText from './ui/colourful-text';
 import { generateSpeech } from '../services/geminiService';
 import { useTheme } from '../contexts/ThemeContext';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('TransitionView');
 
 interface TransitionViewProps {
   userState: UserState;
@@ -57,7 +60,7 @@ const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }
           setShowAudioButton(true);
         }
       } catch (error) {
-        console.error('Error generating speech:', error);
+        logger.error('Error generating speech:', error);
         // Show button even if generation failed (user can try again)
         setShowAudioButton(true);
       }
@@ -76,7 +79,7 @@ const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }
       try {
         await audioContextRef.current.resume();
       } catch (e) {
-        console.error('Failed to resume audio context:', e);
+        logger.error('Failed to resume audio context:', e);
         return false;
       }
     }
@@ -106,7 +109,7 @@ const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }
       setAudioPlaying(true);
       return true;
     } catch (e) {
-      console.error('Failed to play audio:', e);
+      logger.error('Failed to play audio:', e);
       return false;
     }
   };
@@ -143,7 +146,7 @@ const TransitionView: React.FC<TransitionViewProps> = ({ userState, onComplete }
           setAudioPlaying(false);
         }
       } catch (error) {
-        console.error('Error toggling mute:', error);
+        logger.error('Error toggling mute:', error);
       }
     }
   };

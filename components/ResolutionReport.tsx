@@ -5,6 +5,9 @@ import { CheckCircle, FileText, Download, Shield, Trash2, Heart, AlertCircle, Sp
 import { TEXTS } from '../constants';
 import { sanitizeData } from '../utils/encryption';
 import { useTheme } from '../contexts/ThemeContext';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('ResolutionReport');
 import {
   downloadLanternPDF,
   openLanternForPrint,
@@ -113,15 +116,15 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
         // Use setTimeout to defer one more tick after the paint
         setTimeout(async () => {
           try {
-            console.log('[ResolutionReport] UI transitioned, performing hard delete...');
+            logger.info('UI transitioned, performing hard delete...');
             await performHardDelete();
-            console.log('[ResolutionReport] Hard delete complete.');
+            logger.info('Hard delete complete.');
             // Notify parent to unmount sensitive components
             if (onSanitizeData) {
               onSanitizeData();
             }
           } catch (error) {
-            console.error('[ResolutionReport] Hard delete failed:', error);
+            logger.error('Hard delete failed:', error);
             alert('Visual restoration complete, but data could not be fully wiped. Please clear browser cache manually.');
           } finally {
             setHardDeletePending(false);
@@ -251,7 +254,7 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
       const lanternData = extractLanternDataFromUserState(userState, tasks, documentScans);
       downloadLanternPDF(lanternData);
     } catch (error) {
-      console.error('[Lantern] Failed to generate:', error);
+      logger.error('[Lantern] Failed to generate:', error);
     } finally {
       setTimeout(() => setLanternGenerating(false), 1000);
     }
@@ -263,7 +266,7 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
       const lanternData = extractLanternDataFromUserState(userState, tasks, documentScans);
       openLanternForPrint(lanternData);
     } catch (error) {
-      console.error('[Lantern] Failed to open for print:', error);
+      logger.error('[Lantern] Failed to open for print:', error);
     } finally {
       setTimeout(() => setLanternGenerating(false), 1000);
     }
@@ -296,7 +299,7 @@ const ResolutionReport: React.FC<ResolutionReportProps> = ({
 
       setIsSanitizing(false);
     } catch (error) {
-      console.error('[SecureScrub] Failed to generate memorial:', error);
+      logger.error('[SecureScrub] Failed to generate memorial:', error);
       setIsSanitizing(false);
       alert('Failed to prepare memorial. Please try again.');
     }

@@ -14,6 +14,9 @@
 
 import { encryptObject, decryptObject } from './encryption';
 import { ENCRYPTION_PASSWORD } from '../constants';
+import { createLogger } from './logger';
+
+const logger = createLogger('OfflineQueue');
 
 const QUEUE_KEY = 'lighthouse_offline_scan_queue';
 const SYNC_LOCK_KEY = 'lighthouse_sync_in_progress';
@@ -56,12 +59,12 @@ export function initOfflineQueue(options: OfflineQueueOptions = {}) {
       const lockAge = Date.now() - parseInt(syncLock);
       // Lock is stale if older than 5 minutes
       if (lockAge < 5 * 60 * 1000) {
-        console.log('[OfflineQueue] Sync already in progress');
+        logger.info('Sync already in progress');
         return;
       }
     }
 
-    console.log(`[OfflineQueue] Connection restored. Syncing ${queue.length} queued scans...`);
+    logger.info(`Connection restored. Syncing ${queue.length} queued scans...`);
     onSyncStart?.();
 
     const results = await syncQueue();
@@ -94,7 +97,7 @@ function getQueue(): QueuedScan[] {
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     return queue.filter(item => item.timestamp > weekAgo);
   } catch (e) {
-    console.error('[OfflineQueue] Failed to get queue:', e);
+    logger.error('Failed to get queue:', e);
     return [];
   }
 }
@@ -106,7 +109,7 @@ function saveQueue(queue: QueuedScan[]): void {
   try {
     localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
   } catch (e) {
-    console.error('[OfflineQueue] Failed to save queue:', e);
+    logger.error('Failed to save queue:', e);
   }
 }
 
@@ -135,7 +138,7 @@ export async function enqueueOfflineScan(
   queue.push(queuedScan);
   saveQueue(queue);
 
-  console.log(`[OfflineQueue] Enqueued scan: ${fileName}`);
+  logger.info(`Enqueued scan: ${fileName}`);
   return queuedScan;
 }
 
@@ -196,7 +199,7 @@ export async function syncQueue(): Promise<{ success: number; failed: number }> 
       }
       successCount++;
     } catch (e) {
-      console.error(`[OfflineQueue] Failed to sync ${item.id}:`, e);
+      logger.error(`Failed to sync ${item.id}:`, e);
       item.status = 'failed';
       failedCount++;
     }
@@ -211,7 +214,7 @@ export async function syncQueue(): Promise<{ success: number; failed: number }> 
     localStorage.removeItem(SYNC_LOCK_KEY);
   }
 
-  console.log(`[OfflineQueue] Sync complete: ${successCount} succeeded, ${failedCount} failed`);
+  logger.info(`Sync complete: ${successCount} succeeded, ${failedCount} failed`);
   return { success: successCount, failed: failedCount };
 }
 

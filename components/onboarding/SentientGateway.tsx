@@ -18,6 +18,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mic, Eye, ArrowRight, Heart, Sprout } from 'lucide-react';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('SentientGateway');
 
 type UserPath = 'bereaved' | 'sentient';
 
@@ -74,7 +77,7 @@ export default function SentientGateway({
       setAudioPermissionDenied(false);
       return true;
     } catch (error) {
-      console.error('[SentientGateway] Audio permission denied:', error);
+      logger.error('Audio permission denied:', error);
       setAudioPermissionDenied(true);
       setAudioPermissionGranted(false);
 
@@ -89,7 +92,7 @@ export default function SentientGateway({
 
   // Handle mode selection
   const handleModeSelect = async (mode: 'voice' | 'discretion') => {
-    console.log('[SentientGateway] handleModeSelect called with mode:', mode, 'selectedPath:', selectedPath);
+    logger.info('handleModeSelect called with mode:', mode, 'selectedPath:', selectedPath);
     setSelectedMode(mode);
 
     // Haptic feedback (if supported)
@@ -130,7 +133,7 @@ export default function SentientGateway({
 
   // Handle path selection (Bereaved vs Sentient)
   const handlePathSelect = (path: UserPath) => {
-    console.log('[SentientGateway] handlePathSelect called with path:', path);
+    logger.info('handlePathSelect called with path:', path);
     setSelectedPath(path);
 
     // Haptic feedback
@@ -253,7 +256,7 @@ export default function SentientGateway({
               {/* Primary Action Button */}
               <button
                 onClick={() => {
-                  console.log('[SentientGateway] Begin button clicked');
+                  logger.info('Begin button clicked');
                   setShowPathSelector(true);
                 }}
                 className="group flex items-center justify-center gap-3 px-8 py-4 bg-black dark:bg-stone-800 hover:bg-stone-800 dark:hover:bg-stone-700 text-white rounded-2xl transition-all duration-300 cursor-pointer shadow-lg hover:shadow-xl"

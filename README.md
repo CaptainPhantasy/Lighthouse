@@ -93,7 +93,7 @@ cp .env.example .env.local
 
 Edit `.env.local` and add your Gemini API key:
 ```env
-GEMINI_API_KEY=your_gemini_api_key_here
+VITE_GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 4. Start the development server:
@@ -120,7 +120,7 @@ vercel
    - The environment variables
    - The static build output
 
-4. Set the GEMINI_API_KEY environment variable in the Vercel dashboard
+4. Set the VITE_GEMINI_API_KEY environment variable in the Vercel dashboard
 
 ### Other Platforms
 
@@ -134,7 +134,7 @@ The build output is in the `dist` directory. You can deploy to:
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `GEMINI_API_KEY` | Google Gemini API key for AI features | Yes |
+| `VITE_GEMINI_API_KEY` | Google Gemini API key for AI features | Yes |
 
 ## Security Features
 

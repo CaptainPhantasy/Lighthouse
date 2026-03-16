@@ -28,6 +28,9 @@ import { useCheckpointedNarrative, type NarrativeCheckpoint } from '@/hooks/useC
 import { setStoryContext } from '@/services/geminiService';
 import { UserState, WishesKnowledgeLevel } from '@/types';
 import { deepResearchInterstateTransport } from '@/services/geminiService';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('VoiceIntro');
 import { Send, Mic } from 'lucide-react';
 import { useVoicePreferences } from '@/contexts/VoicePreferenceContext';
 import { VoiceWelcomeModal } from '../voice';
@@ -187,7 +190,7 @@ Take your time. I'm listening.`;
               }, 500);
             })
             .catch((err) => {
-              console.error('[VoiceIntro] TTS failed, still starting listening:', err);
+              logger.error('TTS failed, still starting listening:', err);
               // Even if TTS fails, start listening
               setTimeout(() => {
                 if (isMountedRef.current && isVoiceMode) {
@@ -260,7 +263,7 @@ Return ONLY valid JSON:
         return JSON.parse(cleaned);
       }
     } catch (e) {
-      console.error('[VoiceIntro] Extraction error:', e);
+      logger.error('Extraction error:', e);
     }
     return {};
   }, []);
@@ -344,7 +347,7 @@ Return ONLY valid JSON:
       const isInterstate = !isSameLocation(extractedInfo.userLocation, extractedInfo.deceasedLocation);
 
       if (isInterstate) {
-        console.log('[VoiceIntro] Interstate detected - Deep Research initiated');
+        logger.info('Interstate detected - Deep Research initiated');
         try {
           const itinerary = await deepResearchInterstateTransport(
             extractedInfo.userLocation,
@@ -354,7 +357,7 @@ Return ONLY valid JSON:
             (userState as any).interstateItinerary = itinerary;
           }
         } catch (e) {
-          console.error('[VoiceIntro] Deep research failed:', e);
+          logger.error('Deep research failed:', e);
         }
       }
     }

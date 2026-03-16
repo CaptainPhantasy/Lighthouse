@@ -1,5 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { generateSpeech } from '../services/geminiService';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('useTTS');
 
 interface TextToSpeechHook {
   speak: (text: string) => Promise<void>;
@@ -30,7 +33,7 @@ export const useTextToSpeech = (): TextToSpeechHook => {
 
     // Prevent concurrent speak calls (React Strict Mode can double-invoke effects)
     if (speakInProgressRef.current) {
-      console.log('[useTTS] Speak already in progress, skipping duplicate call');
+      logger.info('Speak already in progress, skipping duplicate call');
       return;
     }
 
@@ -46,7 +49,7 @@ export const useTextToSpeech = (): TextToSpeechHook => {
       const audioBuffer = await generateSpeech(text);
 
       if (!audioBuffer) {
-        console.warn('[useTTS] No audio generated, falling back to browser TTS');
+        logger.warn('No audio generated, falling back to browser TTS');
         speakInProgressRef.current = false;
         if (isMountedRef.current) {
           setIsSpeaking(false);
@@ -63,7 +66,7 @@ export const useTextToSpeech = (): TextToSpeechHook => {
         }
         ctx = new AudioContextClass();
       } catch (e) {
-        console.error('[useTTS] AudioContext creation failed:', e);
+        logger.error('AudioContext creation failed:', e);
         speakInProgressRef.current = false;
         if (isMountedRef.current) {
           setIsSpeaking(false);
@@ -86,7 +89,7 @@ export const useTextToSpeech = (): TextToSpeechHook => {
         try {
           await ctx.resume();
         } catch (e) {
-          console.error('[useTTS] Failed to resume AudioContext:', e);
+          logger.error('Failed to resume AudioContext:', e);
         }
       }
 
@@ -112,7 +115,7 @@ export const useTextToSpeech = (): TextToSpeechHook => {
           try {
             source.start(0);
           } catch (e) {
-            console.error('[useTTS] Failed to start audio source:', e);
+            logger.error('Failed to start audio source:', e);
             speakInProgressRef.current = false;
             if (isMountedRef.current) {
               setIsSpeaking(false);
@@ -125,7 +128,7 @@ export const useTextToSpeech = (): TextToSpeechHook => {
       });
 
     } catch (error) {
-      console.error('[useTTS] Speech generation failed:', error);
+      logger.error('Speech generation failed:', error);
       speakInProgressRef.current = false;
       if (isMountedRef.current) {
         setIsSpeaking(false);

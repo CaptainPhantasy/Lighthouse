@@ -9,7 +9,9 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createLogger } from '../utils/logger';
 
+const logger = createLogger('CheckpointedNarrative');
 const STORAGE_KEY = 'lighthouse_narrative_checkpoint';
 const CHECKPOINT_INTERVAL = 10000; // 10 seconds
 
@@ -110,7 +112,7 @@ export function useCheckpointedNarrative(
         }
       }
     } catch (e) {
-      console.error('[CheckpointedNarrative] Failed to load checkpoint:', e);
+      logger.error('Failed to load checkpoint:', e);
     }
   }, [initialCheckpoint]);
 
@@ -149,9 +151,9 @@ export function useCheckpointedNarrative(
       checkpointRef.current = checkpoint;
       setIsAutoSaving(true);
       setTimeout(() => setIsAutoSaving(false), 500); // Brief flash indicator
-      console.log('[CheckpointedNarrative] Saved:', versionRef.current);
+      logger.info('Saved:', versionRef.current);
     } catch (e) {
-      console.error('[CheckpointedNarrative] Failed to save:', e);
+      logger.error('Failed to save:', e);
     }
   }, [userTranscript, aiResponses, extractedInfo]);
 

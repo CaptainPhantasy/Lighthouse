@@ -35,6 +35,42 @@ export default defineConfig(({ mode }) => {
           '@/utils': path.resolve(__dirname, 'lib'),
           '@/components': path.resolve(__dirname, 'components'),
         }
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: (id) => {
+              // Split heavy 3D library into its own chunk
+              if (id.includes('three') || id.includes('@react-three')) {
+                return 'three-vendor';
+              }
+              // Split animation library
+              if (id.includes('framer-motion')) {
+                return 'motion-vendor';
+              }
+              // Split Supabase SDK
+              if (id.includes('@supabase')) {
+                return 'supabase-vendor';
+              }
+              // Split Google GenAI SDK
+              if (id.includes('@google/genai')) {
+                return 'genai-vendor';
+              }
+              // Split icon libraries
+              if (id.includes('lucide-react') || id.includes('@tabler/icons-react')) {
+                return 'icons-vendor';
+              }
+              // Split Radix UI components
+              if (id.includes('@radix-ui')) {
+                return 'radix-vendor';
+              }
+              // Split React vendor chunk
+              if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+                return 'react-vendor';
+              }
+            }
+          }
+        }
       }
     };
 });

@@ -1,6 +1,10 @@
 // Zero-Knowledge Encryption Utility for Lighthouse
 // Uses Web Crypto API to encrypt/decrypt sensitive data locally
 
+import { createLogger } from './logger';
+
+const logger = createLogger('Encryption');
+
 export interface EncryptionResult {
   encrypted: string;
   iv: string;
@@ -82,7 +86,7 @@ export const encryptData = async (data: any, password: string): Promise<Encrypti
       salt: saltBase64
     };
   } catch (error) {
-    console.error('Encryption error:', error);
+    logger.error('Encryption error:', error);
     throw new Error('Failed to encrypt data');
   }
 };
@@ -124,18 +128,18 @@ export const decryptData = async (encryptedResult: EncryptionResult, password: s
 
     return new TextDecoder().decode(decryptedBuffer);
   } catch (error) {
-    console.error('Decryption error:', error);
+    logger.error('Decryption error:', error);
     throw new Error('Failed to decrypt data');
   }
 };
 
 // Check if data appears to be encrypted (has iv and salt properties)
 export const isEncrypted = (data: any): data is EncryptionResult => {
-  return data &&
+  return !!(data &&
     typeof data === 'object' &&
     'encrypted' in data &&
     'iv' in data &&
-    'salt' in data;
+    'salt' in data);
 };
 
 // Sanitize encryption keys and salts (permanently delete)
@@ -185,17 +189,17 @@ export const decryptField = async (encryptedResult: EncryptionResult, password: 
 };
 
 // Sanitize all sensitive data from an object while preserving non-sensitive data
-export const sanitizeData = <T>(data: T): T => {
+export const sanitizeData = <T extends Record<string, unknown>>(data: T): T => {
   const sanitized = { ...data };
 
-  Object.keys(sanitized).forEach(key => {
-    const lowerKey = key.toLowerCase();
+  (Object.keys(sanitized) as Array<keyof T>).forEach(key => {
+    const lowerKey = String(key).toLowerCase();
     if (containsSensitiveInfo(lowerKey)) {
       // Remove the sensitive field
       delete sanitized[key];
     } else if (typeof sanitized[key] === 'object' && sanitized[key] !== null && !Array.isArray(sanitized[key])) {
       // Recursively sanitize nested objects
-      sanitized[key] = sanitizeData(sanitized[key]);
+      (sanitized as Record<string, unknown>)[key as string] = sanitizeData(sanitized[key] as Record<string, unknown>);
     }
   });
 

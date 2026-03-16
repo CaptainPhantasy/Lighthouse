@@ -18,6 +18,9 @@ import { SentientUserState, LifeStage, PrimaryGoal } from '../../types';
 import { useSpeechToText } from '../../hooks/useSpeechToText';
 import { useTextToSpeech } from '../../hooks/useTextToSpeech';
 import { useVoicePreferences } from '../../contexts/VoicePreferenceContext';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('SentientIntake');
 import { VoiceWelcomeModal } from '../voice';
 import { VoiceToggle } from '../voice';
 
@@ -170,7 +173,7 @@ const SentientIntake: React.FC<SentientIntakeProps> = ({ onComplete }) => {
         }
       }
     } catch (e) {
-      console.error('[SentientIntake] Name extraction failed:', e);
+      logger.error('Name extraction failed:', e);
     }
   };
 

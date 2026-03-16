@@ -15,6 +15,9 @@ import {
   getQueueSummary,
   type OfflineQueueOptions,
 } from '../utils/offlineQueue';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('SmartVault');
 
 interface SmartVaultProps {
   onTaskCreated?: (task: Task) => void;
@@ -106,7 +109,7 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
             const decryptedData = await decryptObject(doc.extractedData as EncryptionResult, ENCRYPTION_PASSWORD);
             decrypted[doc.id] = decryptedData;
           } catch (error) {
-            console.error(`Failed to decrypt document ${doc.id}:`, error);
+            logger.error(`Failed to decrypt document ${doc.id}:`, error);
             decrypted[doc.id] = [];
           }
         } else {
@@ -176,7 +179,7 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
 
       // Check if online
       if (!checkOnline()) {
-        console.log('[SmartVault] Offline - enqueuing scan for later');
+        logger.info('Offline - enqueuing scan for later');
         enqueueOfflineScan(file.name, mimeType, base64Data);
         setQueuedScans(getQueueSize() + 1);
         setIsAnalyzing(false);
@@ -329,7 +332,7 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
 
           setDocuments(prev => [encryptedDoc, ...prev]);
         } catch (encryptionError) {
-          console.error('Failed to encrypt document data:', encryptionError);
+          logger.error('Failed to encrypt document data:', encryptionError);
           if (onDocumentScan) {
             onDocumentScan(newDoc);
           }
@@ -341,7 +344,7 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
           fileInputRef.current.value = '';
         }
       } catch (err) {
-        console.error('Error in document analysis:', err);
+        logger.error('Error in document analysis:', err);
 
         // ALWAYS create the document, even if AI analysis fails
         // The document is still valuable - Gemini can analyze it later
@@ -376,7 +379,7 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
     };
 
     reader.onerror = () => {
-      console.error('[SmartVault] Failed to read file');
+      logger.error('Failed to read file');
       setIsAnalyzing(false);
       setScanGuidance({ state: 'error', message: 'Failed to read file. Please try again.' });
       setTimeout(() => setScanGuidance({ state: 'idle', message: '' }), 3000);

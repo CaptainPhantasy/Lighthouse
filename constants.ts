@@ -1,6 +1,7 @@
 import { UserState, Task } from './types';
 
 // Encryption password - in production this should come from user input or derived from user biometrics
+// Default fallback ensures the app works for new users; they can set their own password later
 export const ENCRYPTION_PASSWORD = process.env.ENCRYPTION_PASSWORD || 'lighthouse_default_key_2024';
 
 export const INITIAL_USER_STATE: UserState = {
@@ -124,7 +125,10 @@ export const MOCK_TASKS: Task[] = [
 export const SERVICE_PREFERENCES = {
   SECULAR: 'Secular/Celebration of Life',
   RELIGIOUS: 'Traditional/Religious',
-  BRIEF: 'Brief/Private'
+  BRIEF: 'Brief/Private',
+  MILITARY: 'Military/Honors',
+  CELEBRATION_OF_LIFE: 'Celebration of Life',
+  OTHER: 'Other / Custom'
 } as const;
 
 export type ServicePreference = keyof typeof SERVICE_PREFERENCES;
@@ -145,6 +149,33 @@ export const OFFICIANT_QUESTIONS = {
     "How would their closest friends describe them in 3 words?",
     "Is there a special saying or quote that was meaningful to them?",
     "Are there specific scriptures, hymns, or religious traditions we should honor?"
+  ],
+  BRIEF: [
+    "What was your loved one's name?",
+    "What is one thing you'd like everyone to remember about them?",
+    "Who should be invited to speak briefly?",
+    "Is there a special song or reading you'd like included?"
+  ],
+  MILITARY: [
+    "What branch of service did they serve in?",
+    "What were 2-3 of your loved one's most cherished values or principles?",
+    "Can you share a favorite memory that shows their personality?",
+    "What was their proudest moment during their service?",
+    "What military honors or awards did they receive?"
+  ],
+  CELEBRATION_OF_LIFE: [
+    "What were 2-3 of your loved one's most cherished values or principles?",
+    "Can you share a favorite memory that makes you smile?",
+    "What passions or hobbies brought them the most joy?",
+    "How would their closest friends describe them in 3 words?",
+    "Is there a special quote, song, or saying that reminds you of them?"
+  ],
+  OTHER: [
+    "Describe the type of service you have in mind",
+    "What are the most important elements to include?",
+    "Who will be participating or speaking?",
+    "How long should the service be?",
+    "Are there any cultural or religious traditions to honor?"
   ]
 } as const;
 
@@ -179,5 +210,35 @@ export const SERVICE_TEMPLATES = {
     openingSection: '## 1. Welcome (2 minutes)\n*Welcome friends and family*\n*Brief acknowledgment of why we\'ve gathered*',
     readingSection: '## 4. Moment of Silence (2 minutes)\n*A moment of silence to remember and reflect*',
     closingSection: '## 5. Closing (2 minutes)\n*Brief words of comfort*\n*Thank everyone for being here*'
+  },
+  MILITARY: {
+    opening: 'Call to Order & Posting of Colors',
+    eulogy: 'Eulogy & Service Tribute',
+    memories: 'Shared Memories',
+    reading: 'Military Honors Recognition',
+    closing: 'Taps & Final Salute',
+    openingSection: '## 1. Call to Order & Posting of Colors (3 minutes)\n*Welcome friends, family, and fellow service members*\n*Posting of Colors by honor guard*\n*Moment of silence for fallen comrades*',
+    readingSection: '## 4. Military Honors Recognition (3 minutes)\n*Recognition of rank, branch, and years of service*\n*Presentation of medals and commendations*\n*Reading of any military citations*',
+    closingSection: '## 5. Taps & Final Salute (3 minutes)\n*Playing of Taps*\n*Final salute to the departed*\n*Folded flag presentation to next of kin*'
+  },
+  CELEBRATION_OF_LIFE: {
+    opening: 'Welcome & Opening',
+    eulogy: 'Celebration of Life Stories',
+    memories: 'Joyful Memories',
+    reading: 'Favorite Readings & Music',
+    closing: 'Celebration Closing',
+    openingSection: '## 1. Welcome & Opening (3 minutes)\n*Welcome everyone to this celebration of life*\n*Set a joyful, uplifting tone*\n*Acknowledge the mix of emotions we may feel*',
+    readingSection: '## 4. Favorite Readings & Music (3 minutes)\n*Share their favorite quotes, poems, or lyrics*\n*Play meaningful music that they loved*\n*Include moments for participation if desired*',
+    closingSection: '## 5. Celebration Closing (3 minutes)\n*Final tribute celebrating their unique spirit*\n*Invitation to carry their memory forward*\n*Closing with hope and gratitude*'
+  },
+  OTHER: {
+    opening: 'Welcome',
+    eulogy: 'Remembrance',
+    memories: 'Sharing Time',
+    reading: 'Readings',
+    closing: 'Closing',
+    openingSection: '## 1. Welcome\n*Gather everyone together*\n*Set a respectful tone*',
+    readingSection: '## 4. Readings\n*Include selected readings or texts*\n*Allow for personal contributions*',
+    closingSection: '## 5. Closing\n*Final words of remembrance*\n*Thank everyone for attending*'
   }
 } as const;
