@@ -3,16 +3,37 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+package-lock.json
 
 # Production builds
 dist/
 build/
 
-# Environment variables
+# Environment variables - CRITICAL: Never commit these
+.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env.*.local
+*.env
+
+# Cloud/Service credentials - NEVER COMMIT
+client_secret*.json
+oauth-credentials*.json
+service-account*.json
+*-credentials.json
+firebase-*.json
+google-services.json
+GoogleService-Info.plist
+
+# API keys and secrets
+secrets/
+.secrets/
+*.pem
+*.key
+*.crt
+*.p12
 
 # OS generated files
 .DS_Store
@@ -28,23 +49,11 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+*~
 
 # Testing
 coverage/
-
-# Python files (from mock generation)
-create_mock_documents.py
-improved_documents/
-
-# Logs
-logs
-*.log
-
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
+.nyc_output/
 
 # Optional npm cache directory
 .npm
@@ -58,28 +67,31 @@ pids
 # Output of 'npm pack'
 *.tgz
 
-# Yarn Integrity file
-.yarn-integrity
+# Logs
+logs/
+*.log
 
-# dotenv environment variables file
-.env
-.env.test
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
 
-# parcel-bundler cache (https://parceljs.org/)
-.cache
-.parcel-cache
+# parcel-bundler cache
+.cache/
+.parcel-cache/
 
-# Next.js build output
-.next
+# Next.js / Nuxt.js
+.next/
+.nuxt/
 
-# Nuxt.js build / generate output
-.nuxt
-dist
-
-# Storybook build outputs
-.out
-.storybook-out
+# Storybook
+.out/
+.storybook-out/
 
 # Temporary folders
 tmp/
 temp/
+
+# Floyd operational files (local state)
+.floyd/
