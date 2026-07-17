@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "gates": [
+    {
+      "name": "lighthouse-recovery-checks",
+      "command": [
+        "sh",
+        "-c",
+        "npm ci && npm run test:run && npm run type-check && npm run lint -- --max-warnings 200 && npm run build && npm audit --omit=dev --audit-level=high"
+      ],
+      "required": true
+    }
+  ],
+  "include": [
+    ".proofline.json",
+    "components/SmartVault.tsx",
+    "components/ui/input.tsx",
+    "components/ui/placeholders-and-vanish-input.tsx",
+    "eslint.config.js",
+    "hooks/use-outside-click.tsx",
+    "hooks/useTextToSpeech.tsx",
+    "package.json",
+    "package-lock.json",
+    "tests/encryption.test.ts",
+    "tests/offlineQueue.test.ts",
+    "tests/secureScrub.test.ts",
+    "tests/setup/globals.ts",
+    "tests/storage.test.ts",
+    "tsconfig.json",
+    "utils/storage.ts",
+    "vitest.config.ts"
+  ],
+  "deny": [
+    ".env",
+    ".env.*",
+    "*.pem",
+    "*.key",
+    "node_modules/**",
+    "dist/**",
+    "coverage/**",
+    ".git/**",
+    ".harness/**",
+    ".pi/**",
+    ".omp/**",
+    ".supercache/**",
+    ".floyd/**",
+    ".planning/**",
+    "Issues/**",
+    "SSOT/**",
+    "FLOYD.md"
+  ],
+  "baseBranch": "main",
+  "publish": true
+}

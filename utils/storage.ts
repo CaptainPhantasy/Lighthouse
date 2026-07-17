@@ -36,7 +36,7 @@ export const getLocalStorageUsage = (): { used: number; available: number } => {
 
   let total = 0;
   for (let key in localStorage) {
-    if (localStorage.hasOwnProperty(key)) {
+    if (Object.prototype.hasOwnProperty.call(localStorage, key)) {
       total += key.length + localStorage[key].length;
     }
   }
@@ -203,7 +203,7 @@ class SafeStorage {
   private getLocalStorageUsageInternal(): { used: number; available: number } {
     let total = 0;
     for (let key in localStorage) {
-      if (localStorage.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(localStorage, key)) {
         total += key.length + localStorage[key].length;
       }
     }
