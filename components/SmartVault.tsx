@@ -225,7 +225,7 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
           let taskToCreate: Task | null = null;
 
           switch (analysis.documentType) {
-            case 'INSURANCE':
+            case 'INSURANCE': {
               const policyNumber = analysis.entities?.find((e: any) => e.key.toLowerCase().includes('policy'))?.value;
               const carrier = analysis.entities?.find((e: any) => e.key.toLowerCase().includes('carrier') || e.key.toLowerCase().includes('company'))?.value;
 
@@ -246,8 +246,9 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
                 }
               }
               break;
+            }
 
-            case 'WILL':
+            case 'WILL': {
               const executor = analysis.entities?.find((e: any) => e.key.toLowerCase().includes('executor'))?.value;
               const lawyer = analysis.entities?.find((e: any) => e.key.toLowerCase().includes('lawyer') || e.key.toLowerCase().includes('attorney'))?.value;
 
@@ -283,8 +284,9 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
                 }
               }
               break;
+            }
 
-            case 'ID':
+            case 'ID': {
               const idNumber = analysis.entities?.find((e: any) => e.key.toLowerCase().includes('id') || e.key.toLowerCase().includes('license'))?.value;
               if (idNumber) {
                 taskToCreate = {
@@ -297,6 +299,7 @@ const SmartVault: React.FC<SmartVaultProps> = ({ onTaskCreated, onDocumentScan, 
                 };
               }
               break;
+            }
 
             default:
               if (analysis.taskSuggestion) {

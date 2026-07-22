@@ -32,6 +32,9 @@
   "exclude": [
     "node_modules",
     "dist",
-    "supabase"
+    "supabase",
+    "demo",
+    "components/ui/apple-cards-carousel.tsx",
+    "components/ui/world-map.tsx"
   ]
 }

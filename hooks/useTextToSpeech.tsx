@@ -78,7 +78,7 @@ export const useTextToSpeech = (): TextToSpeechHook => {
         // Component unmounted while generating speech
         try {
           ctx.close();
-        } catch {}
+        } catch { /* noop */ }
         return;
       }
 
@@ -141,13 +141,13 @@ export const useTextToSpeech = (): TextToSpeechHook => {
     if (audioSourceRef.current) {
       try {
         audioSourceRef.current.stop();
-      } catch {}
+      } catch { /* noop */ }
       audioSourceRef.current = null;
     }
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       try {
         audioContextRef.current.close();
-      } catch {}
+      } catch { /* noop */ }
       audioContextRef.current = null;
     }
     if (isMountedRef.current) {

@@ -239,6 +239,7 @@ describe('Encryption Utilities', () => {
       expect(password).toMatch(/[a-z]/); // lowercase
       expect(password).toMatch(/[A-Z]/); // uppercase
       expect(password).toMatch(/[0-9]/); // digits
+      // eslint-disable-next-line no-useless-escape
       expect(password).toMatch(/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/); // special chars
     });
   });
